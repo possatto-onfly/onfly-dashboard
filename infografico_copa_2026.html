@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Onfly · Copa do Mundo 2026 · Viagens Corporativas</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800;900&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background: #0A0F1E;
+    color: #fff;
+    min-height: 100vh;
+  }
+
+  .page {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 48px 32px;
+  }
+
+  /* ── Header ── */
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 48px;
+  }
+  .logo {
+    font-size: 1.6rem;
+    font-weight: 900;
+    letter-spacing: -0.03em;
+    color: #fff;
+  }
+  .logo span { color: #00D4FF; }
+  .badge {
+    background: linear-gradient(135deg, #C8102E, #006341);
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  /* ── Hero ── */
+  .hero {
+    text-align: center;
+    margin-bottom: 56px;
+  }
+  .hero .eyebrow {
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: #00D4FF;
+    margin-bottom: 16px;
+  }
+  .hero h1 {
+    font-size: 2.4rem;
+    font-weight: 900;
+    line-height: 1.15;
+    letter-spacing: -0.03em;
+    margin-bottom: 16px;
+  }
+  .hero h1 em {
+    font-style: normal;
+    background: linear-gradient(90deg, #00D4FF, #7B61FF);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .hero p {
+    font-size: 1rem;
+    color: #8892A4;
+    max-width: 520px;
+    margin: 0 auto;
+    line-height: 1.6;
+  }
+
+  /* ── KPIs principais ── */
+  .kpis-main {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 32px;
+  }
+  .kpi-card {
+    background: linear-gradient(135deg, #111827, #1a2236);
+    border: 1px solid #1E2D45;
+    border-radius: 16px;
+    padding: 28px 24px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .kpi-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #00D4FF, #7B61FF);
+  }
+  .kpi-card.destaque::before {
+    background: linear-gradient(90deg, #C8102E, #FF6B35);
+  }
+  .kpi-card .icon {
+    font-size: 1.8rem;
+    margin-bottom: 12px;
+    display: block;
+  }
+  .kpi-card .valor {
+    font-size: 2.2rem;
+    font-weight: 900;
+    letter-spacing: -0.04em;
+    line-height: 1;
+    margin-bottom: 8px;
+    background: linear-gradient(135deg, #fff, #CBD5E1);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .kpi-card.destaque .valor {
+    background: linear-gradient(135deg, #FF6B35, #FFAA00);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .kpi-card .label {
+    font-size: 0.78rem;
+    color: #64748B;
+    font-weight: 500;
+    line-height: 1.4;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  /* ── Destaque central ── */
+  .highlight-box {
+    background: linear-gradient(135deg, #0D1F3C, #0A2540);
+    border: 1px solid #1E3A5F;
+    border-radius: 20px;
+    padding: 36px 40px;
+    margin-bottom: 32px;
+    display: flex;
+    align-items: center;
+    gap: 40px;
+  }
+  .highlight-box .big-number {
+    font-size: 5rem;
+    font-weight: 900;
+    letter-spacing: -0.05em;
+    line-height: 1;
+    background: linear-gradient(135deg, #00D4FF, #7B61FF);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    white-space: nowrap;
+  }
+  .highlight-box .big-number sup {
+    font-size: 2rem;
+    vertical-align: top;
+    margin-top: 12px;
+    display: inline-block;
+  }
+  .highlight-box .text h3 {
+    font-size: 1.3rem;
+    font-weight: 800;
+    margin-bottom: 8px;
+    letter-spacing: -0.02em;
+  }
+  .highlight-box .text p {
+    font-size: 0.9rem;
+    color: #8892A4;
+    line-height: 1.6;
+  }
+  .highlight-box .text p strong { color: #00D4FF; }
+
+  /* ── Comparativo ── */
+  .comparativo {
+    background: #111827;
+    border: 1px solid #1E2D45;
+    border-radius: 16px;
+    padding: 28px 32px;
+    margin-bottom: 32px;
+  }
+  .comparativo h3 {
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #64748B;
+    margin-bottom: 20px;
+  }
+  .comp-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 12px;
+  }
+  .comp-label {
+    font-size: 0.82rem;
+    color: #94A3B8;
+    width: 180px;
+    flex-shrink: 0;
+  }
+  .comp-bar-wrap {
+    flex: 1;
+    background: #1E2D45;
+    border-radius: 6px;
+    height: 28px;
+    overflow: hidden;
+    position: relative;
+  }
+  .comp-bar {
+    height: 100%;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    transition: width 1s ease;
+  }
+  .comp-bar.antes { background: linear-gradient(90deg, #1E3A5F, #2D5A8E); color: #93C5FD; }
+  .comp-bar.durante { background: linear-gradient(90deg, #00D4FF, #7B61FF); color: #fff; }
+
+  /* ── Destinos ── */
+  .destinos {
+    margin-bottom: 32px;
+  }
+  .destinos h3 {
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #64748B;
+    margin-bottom: 20px;
+    padding: 0 4px;
+  }
+  .destinos-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+  }
+  .dest-card {
+    background: #111827;
+    border: 1px solid #1E2D45;
+    border-radius: 12px;
+    padding: 20px 16px;
+    text-align: center;
+  }
+  .dest-card .iata {
+    font-size: 1.4rem;
+    font-weight: 900;
+    letter-spacing: 0.04em;
+    color: #00D4FF;
+    margin-bottom: 4px;
+  }
+  .dest-card .cidade {
+    font-size: 0.72rem;
+    color: #64748B;
+    margin-bottom: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .dest-card .reservas {
+    font-size: 1.6rem;
+    font-weight: 900;
+    letter-spacing: -0.03em;
+    margin-bottom: 2px;
+  }
+  .dest-card .res-label {
+    font-size: 0.68rem;
+    color: #475569;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 10px;
+  }
+  .dest-card .ticket {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #FFAA00;
+  }
+
+  /* ── Footer ── */
+  .footer {
+    border-top: 1px solid #1E2D45;
+    padding-top: 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .footer .fonte {
+    font-size: 0.7rem;
+    color: #334155;
+    line-height: 1.5;
+  }
+  .footer .data {
+    font-size: 0.7rem;
+    color: #334155;
+    text-align: right;
+  }
+
+  /* ── Divider label ── */
+  .section-label {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .section-label span {
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #64748B;
+    white-space: nowrap;
+  }
+  .section-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: #1E2D45;
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="logo">on<span>fly</span></div>
+    <div class="badge">🏆 FIFA World Cup 2026</div>
+  </div>
+
+  <!-- Hero -->
+  <div class="hero">
+    <div class="eyebrow">Levantamento Exclusivo · Maio 2026</div>
+    <h1>Copa do Mundo 2026 e o<br><em>impacto nas viagens corporativas</em></h1>
+    <p>O que os dados de mais de 5 mil reservas aéreas revelam sobre o comportamento do viajante corporativo brasileiro durante o maior evento esportivo do planeta.</p>
+  </div>
+
+  <!-- KPIs principais -->
+  <div class="section-label"><span>Números do período da Copa (11 Jun – 19 Jul)</span></div>
+  <div class="kpis-main">
+    <div class="kpi-card">
+      <span class="icon">✈️</span>
+      <div class="valor">5.115</div>
+      <div class="label">Passagens aéreas<br>já emitidas</div>
+    </div>
+    <div class="kpi-card destaque">
+      <span class="icon">💰</span>
+      <div class="valor">R$ 20,6M</div>
+      <div class="label">Em volume de<br>viagens corporativas</div>
+    </div>
+    <div class="kpi-card">
+      <span class="icon">🎫</span>
+      <div class="valor">R$ 2.464</div>
+      <div class="label">Ticket médio<br>por reserva</div>
+    </div>
+  </div>
+
+  <!-- Destaque 69% -->
+  <div class="highlight-box">
+    <div class="big-number">+69<sup>%</sup></div>
+    <div class="text">
+      <h3>Voos internacionais crescem durante a Copa</h3>
+      <p>A proporção de voos internacionais nas viagens corporativas salta de <strong>7,2%</strong> antes da Copa para <strong>12,2%</strong> durante o torneio — um salto de 69% que revela como o Mundial impulsiona a mobilidade do executivo brasileiro para os países-sede.</p>
+    </div>
+  </div>
+
+  <!-- Comparativo -->
+  <div class="comparativo">
+    <h3>Proporção de voos internacionais no total de reservas</h3>
+    <div class="comp-row">
+      <div class="comp-label">Antes da Copa</div>
+      <div class="comp-bar-wrap">
+        <div class="comp-bar antes" style="width: 59%">7,2% internacionais</div>
+      </div>
+    </div>
+    <div class="comp-row">
+      <div class="comp-label">Durante a Copa</div>
+      <div class="comp-bar-wrap">
+        <div class="comp-bar durante" style="width: 100%">12,2% internacionais · +69%</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Destinos sede -->
+  <div class="destinos">
+    <div class="section-label"><span>Top destinos nas cidades-sede · Reservas corporativas</span></div>
+    <div class="destinos-grid">
+      <div class="dest-card">
+        <div class="iata">SFO</div>
+        <div class="cidade">San Francisco · EUA</div>
+        <div class="reservas">15</div>
+        <div class="res-label">reservas</div>
+        <div class="ticket">Ø R$ 7.630</div>
+      </div>
+      <div class="dest-card">
+        <div class="iata">MIA</div>
+        <div class="cidade">Miami · EUA</div>
+        <div class="reservas">13</div>
+        <div class="res-label">reservas</div>
+        <div class="ticket">Ø R$ 8.767</div>
+      </div>
+      <div class="dest-card">
+        <div class="iata">MEX</div>
+        <div class="cidade">Cidade do México</div>
+        <div class="reservas">12</div>
+        <div class="res-label">reservas</div>
+        <div class="ticket">Ø R$ 5.471</div>
+      </div>
+      <div class="dest-card">
+        <div class="iata">JFK</div>
+        <div class="cidade">Nova York · EUA</div>
+        <div class="reservas">9</div>
+        <div class="res-label">reservas</div>
+        <div class="ticket">Ø R$ 5.953</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Quote -->
+  <div style="background: linear-gradient(135deg, #0D1F3C, #0A2540); border-left: 4px solid #00D4FF; border-radius: 0 12px 12px 0; padding: 28px 32px; margin-bottom: 32px;">
+    <p style="font-size: 1.05rem; font-style: italic; color: #CBD5E1; line-height: 1.7; margin-bottom: 12px;">
+      "O viajante corporativo não para durante a Copa. Pelo contrário — ele aproveita a janela do torneio para combinar reuniões estratégicas com o maior evento esportivo do mundo."
+    </p>
+    <p style="font-size: 0.8rem; color: #64748B; font-weight: 600;">
+      RODRIGO POSSATTO · Diretor de Sourcing, Onfly
+    </p>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <div class="fonte">
+      Fonte: Onfly · Base de emissões aéreas corporativas<br>
+      Período de referência: voos com data de partida entre 11/jun e 19/jul/2026<br>
+      Dados consultados em maio de 2026 · Números parciais, sujeitos a crescimento
+    </div>
+    <div class="data">
+      onfly.com.br<br>
+      Maio 2026
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

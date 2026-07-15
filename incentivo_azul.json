@@ -1,0 +1,56 @@
+{
+  "2026": {
+    "nacional": {
+      "JAN": {
+        "realizado": 17212793.0,
+        "niveis": [12210481.82, 14652578.18, 15466610.3, 16280642.42, 17908706.67, 19536770.91]
+      },
+      "FEV": {
+        "realizado": 17222474.0,
+        "niveis": [9796754.05, 11756104.85, 12409221.79, 13062338.73, 14368572.6, 15674806.47]
+      },
+      "MAR": {
+        "realizado": 27585253.0,
+        "niveis": [12202766.0, 14643320.0, 15456837.0, 16270355.0, 17897391.0, 19524426.0]
+      },
+      "ABR": {
+        "realizado": null,
+        "niveis": [17263515.0, 20716218.0, 21867119.0, 23018020.0, 25319822.0, 27621624.0]
+      },
+      "MAI": {"realizado": null, "niveis": [null, null, null, null, null, null]},
+      "JUN": {"realizado": null, "niveis": [null, null, null, null, null, null]},
+      "JUL": {"realizado": null, "niveis": [null, null, null, null, null, null]},
+      "AGO": {"realizado": null, "niveis": [null, null, null, null, null, null]},
+      "SET": {"realizado": null, "niveis": [null, null, null, null, null, null]},
+      "OUT": {"realizado": null, "niveis": [null, null, null, null, null, null]},
+      "NOV": {"realizado": null, "niveis": [null, null, null, null, null, null]},
+      "DEZ": {"realizado": null, "niveis": [null, null, null, null, null, null]}
+    },
+    "internacional": {
+      "JAN": {
+        "realizado": 150092.0,
+        "niveis": [45741.0, 54889.0, 57938.0, 60988.0, 67087.0, 73185.0]
+      },
+      "FEV": {
+        "realizado": 260476.0,
+        "niveis": [34851.0, 41821.0, 44144.0, 46468.0, 51114.0, 55761.0]
+      },
+      "MAR": {
+        "realizado": 188353.0,
+        "niveis": [96428.0, 115713.0, 122142.0, 128570.0, 141427.0, 154284.0]
+      },
+      "ABR": {
+        "realizado": null,
+        "niveis": [112500.0, 135000.0, 142500.0, 150000.0, 165000.0, 180000.0]
+      },
+      "MAI": {"realizado": null, "niveis": [null, null, null, null, null, null]},
+      "JUN": {"realizado": null, "niveis": [null, null, null, null, null, null]},
+      "JUL": {"realizado": null, "niveis": [null, null, null, null, null, null]},
+      "AGO": {"realizado": null, "niveis": [null, null, null, null, null, null]},
+      "SET": {"realizado": null, "niveis": [null, null, null, null, null, null]},
+      "OUT": {"realizado": null, "niveis": [null, null, null, null, null, null]},
+      "NOV": {"realizado": null, "niveis": [null, null, null, null, null, null]},
+      "DEZ": {"realizado": null, "niveis": [null, null, null, null, null, null]}
+    }
+  }
+}

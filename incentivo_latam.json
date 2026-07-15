@@ -1,0 +1,36 @@
+{
+  "2026": {
+    "ABR": {
+      "nacional": {
+        "meta_receita": 36627842.0,
+        "realizado_mtd": 11963712.0,
+        "realizado_proj": 34182034.0,
+        "baseline_prm_rvn": 38.1,
+        "realizado_prm_rvn": 37.0,
+        "taxa_real": 6.33
+      },
+      "internacional": {
+        "eu_ca": {
+          "realizado": null,
+          "ranges": [
+            {"min": 725793, "max": 806437,  "taxa_min": 0.5, "taxa_max": 1.0},
+            {"min": 806437, "max": 896041,  "taxa_min": 1.0, "taxa_max": 1.5},
+            {"min": 896041, "max": 995601,  "taxa_min": 1.5, "taxa_max": 2.0},
+            {"min": 995601, "max": 1106223, "taxa_min": 2.0, "taxa_max": 2.5},
+            {"min": 1106223,"max": 1229137, "taxa_min": 2.5, "taxa_max": 3.0},
+            {"min": 1229137,"max": 1365708, "taxa_min": 3.0, "taxa_max": 3.5},
+            {"min": 1365708,"max": 1517453, "taxa_min": 3.5, "taxa_max": 4.0}
+          ]
+        },
+        "outros": {
+          "realizado": null,
+          "ranges": [
+            {"min": 2324988, "max": 3321412, "taxa_min": 0.5, "taxa_max": 1.0},
+            {"min": 3321412, "max": 4744874, "taxa_min": 1.0, "taxa_max": 1.5},
+            {"min": 4744874, "max": 6168336, "taxa_min": 1.5, "taxa_max": 2.0}
+          ]
+        }
+      }
+    }
+  }
+}

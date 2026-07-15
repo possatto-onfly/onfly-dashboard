@@ -1,0 +1,1117 @@
+<!DOCTYPE html>
+<script type="application/json" id="cowork-artifact-meta">
+{
+  "name": "Crm Aereo Sourcing",
+  "schemaVersion": 1,
+  "description": "Painel CRM de gestão de relacionamento com cias aéreas. Seletor de cia + período. 4 abas: Transacional (KPIs + rotas + gráficos do BigQuery ao vivo), Perfil (contatos + acordo comercial, localStorage), Visitas (histórico de visitas, localStorage), Mercado (notas de mercado, localStorage).",
+  "mcpTools": [
+    "mcp__108b7d6e-ce67-4227-b6bb-df8c5e09623c__execute_sql_readonly",
+    "mcp__1eb61ba1-61f6-4a5a-ab01-145ec60b645e__search_threads",
+    "mcp__60f6a2c7-cfe7-456a-8ba4-42e31f6e617f__create_event"
+  ],
+  "mcpServerNames": [
+    "Google Cloud BigQuery",
+    "Gmail",
+    "Google Calendar"
+  ]
+}
+</script>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CRM Cias Aéreas</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js" integrity="sha384-iU8HYtnGQ8Cy4zl7gbNMOhsDTTKX02BTXptVP/vqAWIaTfM7isw76iyZCsjL2eVi" crossorigin="anonymous"></script>
+<style>
+:root { color-scheme: light; --blue:#0064FF; --blue-light:#E8F0FE; --dark:#1a1a2e; --gray:#6b7280; --gray-light:#f3f4f6; --border:#e5e7eb; }
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#f8f9fc;color:var(--dark);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;min-height:100vh}
+.header{background:white;border-bottom:1px solid var(--border);padding:14px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.logo{font-weight:700;font-size:15px;color:var(--blue)}
+.logo span{font-weight:400;color:var(--gray);font-size:13px}
+.header-controls{display:flex;gap:10px;align-items:center;margin-left:auto;flex-wrap:wrap}
+select,input[type="month"],input[type="date"],input[type="text"],textarea{padding:7px 11px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:white;color:var(--dark);font-family:inherit;outline:none}
+select:focus,input:focus,textarea:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(0,100,255,.1)}
+#airline-select{min-width:220px;font-weight:500;cursor:pointer}
+.btn{padding:7px 15px;border-radius:8px;border:none;font-size:13px;font-weight:500;cursor:pointer;transition:all .15s}
+.btn-primary{background:var(--blue);color:white}
+.btn-primary:hover{background:#0052cc}
+.btn-outline{background:white;color:var(--blue);border:1px solid var(--blue)}
+.btn-outline:hover{background:var(--blue-light)}
+.btn-sm{padding:4px 10px;font-size:12px}
+.btn-danger{background:white;color:#ef4444;border:1px solid #ef4444}
+.tabs-nav{display:flex;background:white;border-bottom:1px solid var(--border);padding:0 20px;gap:2px}
+.tab-btn{padding:11px 18px;background:none;border:none;border-bottom:2px solid transparent;font-size:13px;font-weight:500;color:var(--gray);cursor:pointer;transition:all .15s}
+.tab-btn:hover{color:var(--blue)}
+.tab-btn.active{color:var(--blue);border-bottom-color:var(--blue)}
+.main{padding:20px;max-width:1100px;margin:0 auto}
+.tab-panel{display:none}.tab-panel.active{display:block}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-bottom:20px}
+.kpi-card{background:white;border-radius:10px;padding:18px;border:1px solid var(--border)}
+.kpi-label{font-size:11px;font-weight:600;color:var(--gray);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+.kpi-value{font-size:26px;font-weight:700;line-height:1.1}
+.kpi-sub{font-size:11px;color:var(--gray);margin-top:3px}
+.card{background:white;border-radius:10px;border:1px solid var(--border);margin-bottom:18px;overflow:hidden}
+.card-header{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+.card-title{font-size:13px;font-weight:600}
+.card-body{padding:18px}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{text-align:left;padding:8px 12px;background:var(--gray-light);font-weight:600;color:var(--gray);font-size:11px;text-transform:uppercase;letter-spacing:.5px}
+td{padding:9px 12px;border-bottom:1px solid var(--border)}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:var(--gray-light)}
+.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}
+.form-group{display:flex;flex-direction:column;gap:4px}
+.form-group label{font-size:11px;font-weight:600;color:var(--gray);text-transform:uppercase;letter-spacing:.4px}
+.form-group textarea{resize:vertical;min-height:72px;width:100%}
+.form-group input,.form-group select{width:100%}
+.visit-item{border:1px solid var(--border);border-radius:10px;padding:15px;margin-bottom:12px;background:white}
+.visit-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px}
+.visit-date-badge{font-size:11px;font-weight:700;color:var(--blue);background:var(--blue-light);padding:3px 8px;border-radius:4px}
+.visit-location{font-size:12px;color:var(--gray);margin-top:2px}
+.visit-tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.tag{font-size:11px;background:var(--gray-light);color:var(--gray);padding:2px 8px;border-radius:20px;font-weight:500}
+.tag-blue{background:var(--blue-light);color:var(--blue)}
+.vf{margin-top:10px}
+.vf-label{font-size:10px;font-weight:700;text-transform:uppercase;color:var(--gray);letter-spacing:.5px;margin-bottom:2px}
+.vf-value{font-size:13px;line-height:1.5}
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:1000;justify-content:center;align-items:flex-start;padding:40px 16px;overflow-y:auto}
+.modal-overlay.open{display:flex}
+.modal{background:white;border-radius:14px;padding:22px;width:100%;max-width:580px;margin:auto}
+.modal-title{font-size:15px;font-weight:700;margin-bottom:18px;display:flex;justify-content:space-between;align-items:center}
+.modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}
+.note-item{border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px;background:white}
+.note-date{font-size:11px;color:var(--gray);margin-bottom:3px}
+.note-title{font-size:14px;font-weight:600;margin-bottom:6px}
+.note-content{font-size:13px;color:var(--gray);line-height:1.5}
+.loading{display:flex;align-items:center;justify-content:center;padding:40px;color:var(--gray);gap:10px;font-size:14px}
+.spinner{width:20px;height:20px;border:2px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.empty-state{text-align:center;padding:40px 20px;color:var(--gray)}
+.empty-state .icon{font-size:38px;margin-bottom:10px}
+.chart-container{position:relative;height:220px}
+.charts-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:18px}
+@media(max-width:640px){.charts-grid{grid-template-columns:1fr}}
+.badge{display:inline-block;padding:2px 7px;border-radius:20px;font-size:11px;font-weight:600}
+.badge-green{background:#d1fae5;color:#065f46}
+.badge-yellow{background:#fef3c7;color:#92400e}
+.badge-red{background:#fee2e2;color:#991b1b}
+.badge-blue{background:var(--blue-light);color:var(--blue)}
+.contact-row{display:grid;grid-template-columns:1fr 1fr 1.4fr 1fr 28px;gap:6px;margin-bottom:6px;align-items:center}
+.contact-row input{padding:5px 9px;font-size:12px}
+.icon-btn{width:26px;height:26px;border:none;background:none;cursor:pointer;color:var(--gray);display:flex;align-items:center;justify-content:center;border-radius:4px;font-size:15px}
+.icon-btn:hover{color:#ef4444;background:#fee2e2}
+.section-title{font-size:11px;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;margin-top:18px}
+.section-title:first-child{margin-top:0}
+hr.divider{border:none;border-top:1px solid var(--border);margin:18px 0}
+</style>
+</head>
+<body>
+<script>/* __CRM_DATA_PLACEHOLDER__ */</script>
+
+<div class="header">
+  <div class="logo">✈ CRM Aéreo <span>/ Sourcing Onfly</span></div>
+  <div class="header-controls" style="display:none">
+    <select id="airline-select"></select>
+    <input type="month" id="from-month" />
+    <input type="month" id="to-month" />
+  </div>
+</div>
+
+<div class="tabs-nav">
+  <button class="tab-btn active" data-tab="transacional" onclick="switchTab('transacional')">📊 Transacional</button>
+  <button class="tab-btn" data-tab="perfil" onclick="switchTab('perfil')">🏢 Perfil</button>
+  <button class="tab-btn" data-tab="visitas" onclick="switchTab('visitas')">📋 Visitas</button>
+  <button class="tab-btn" data-tab="mercado" onclick="switchTab('mercado')">🌐 Mercado</button>
+</div>
+
+<div class="main">
+  <div id="tab-transacional" class="tab-panel active">
+    <div id="transacional-content"><div class="empty-state"><div class="icon">✈️</div><p>Selecione uma cia aérea e clique em <strong>Atualizar</strong></p></div></div>
+  </div>
+  <div id="tab-perfil" class="tab-panel">
+    <div id="perfil-content"><div class="empty-state"><div class="icon">🏢</div><p>Selecione uma cia aérea</p></div></div>
+  </div>
+  <div id="tab-visitas" class="tab-panel">
+    <div id="visitas-content"><div class="empty-state"><div class="icon">📋</div><p>Selecione uma cia aérea</p></div></div>
+  </div>
+  <div id="tab-mercado" class="tab-panel">
+    <div id="mercado-content"><div class="empty-state"><div class="icon">🌐</div><p>Selecione uma cia aérea</p></div></div>
+  </div>
+</div>
+
+<!-- Modal Visita -->
+<div class="modal-overlay" id="visit-modal">
+  <div class="modal">
+    <div class="modal-title">📋 Registrar Visita <button class="icon-btn" onclick="closeVisitModal()">✕</button></div>
+    <div class="form-grid" style="margin-bottom:10px;grid-template-columns:1fr 1fr 1fr">
+      <div class="form-group"><label>Data *</label><input type="date" id="v-date" required /></div>
+      <div class="form-group"><label>Início</label><input type="time" id="v-start" value="09:00" /></div>
+      <div class="form-group"><label>Fim</label><input type="time" id="v-end" value="10:00" /></div>
+    </div>
+    <div class="form-group" style="margin-bottom:8px">
+      <label>Local</label><input type="text" id="v-local" placeholder="Cidade, sede..." />
+    </div>
+    <div class="form-grid" style="margin-bottom:4px">
+      <div class="form-group"><label>Participantes Onfly <span style="font-weight:400;color:var(--gray);font-size:11px">(separe por vírgula)</span></label><input type="text" id="v-onfly" placeholder="Rodrigo, Ana..." /></div>
+      <div class="form-group"><label>Participantes Cia <span style="font-weight:400;color:var(--gray);font-size:11px">(separe por vírgula)</span></label><input type="text" id="v-cia" placeholder="João Silva, Maria Costa..." /></div>
+    </div>
+    <div style="margin-bottom:12px">
+      <button type="button" class="btn btn-outline btn-sm" onclick="lookupAttendees()" id="v-lookup-btn">🔍 Buscar emails dos participantes</button>
+      <div id="v-attendee-results" style="margin-top:8px;display:none"></div>
+      <input type="hidden" id="v-cia-emails" />
+    </div>
+    <div class="form-group" style="margin-bottom:10px"><label>Pauta / Agenda</label><textarea id="v-pauta" placeholder="Principais tópicos..."></textarea></div>
+    <div class="form-group" style="margin-bottom:10px"><label>Resultados / Acordos</label><textarea id="v-resultados" placeholder="Decisões tomadas..."></textarea></div>
+    <div class="form-group" style="margin-bottom:10px"><label>Próximos Passos</label><textarea id="v-proximos" placeholder="Ações, responsáveis, prazos..."></textarea></div>
+    <div class="form-grid">
+      <div class="form-group"><label>Follow-up</label><input type="date" id="v-followup" /></div>
+      <div class="form-group"><label>Status</label><select id="v-status"><option value="realizada">Realizada</option><option value="planejada">Planejada</option><option value="cancelada">Cancelada</option></select></div>
+    </div>
+    <input type="hidden" id="v-edit-id" />
+    <div style="margin-top:14px;padding:12px;background:var(--gray-light);border-radius:8px;display:flex;gap:20px;flex-wrap:wrap">
+      <label style="display:flex;align-items:center;gap:7px;font-size:13px;cursor:pointer"><input type="checkbox" id="v-calendar" checked /> 📅 Criar evento no Google Calendar</label>
+      <label style="display:flex;align-items:center;gap:7px;font-size:13px;cursor:pointer"><input type="checkbox" id="v-meet" /> 🎥 Incluir Google Meet</label>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeVisitModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveVisit()">Salvar Visita</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Mercado -->
+<div class="modal-overlay" id="market-modal">
+  <div class="modal">
+    <div class="modal-title">🌐 Informação de Mercado <button class="icon-btn" onclick="closeMarketModal()">✕</button></div>
+    <div class="form-group" style="margin-bottom:12px">
+      <label>URL da Notícia</label>
+      <div style="display:flex;gap:8px">
+        <input type="text" id="m-source" placeholder="Cole o link aqui..." style="flex:1" onpaste="setTimeout(autoFillFromUrl,150)" />
+        <button id="autofill-btn" class="btn btn-primary btn-sm" onclick="autoFillFromUrl()" style="white-space:nowrap">✨ Auto-preencher</button>
+      </div>
+      <div id="autofill-loading" style="display:none;font-size:12px;color:var(--blue);margin-top:6px">⏳ Analisando URL...</div>
+    </div>
+    <div class="form-group" style="margin-bottom:10px"><label>Título *</label><input type="text" id="m-title" placeholder="Ex: Novo acordo codeshare..." /><div id="autofill-status" style="font-size:11px;margin-top:4px;display:none"></div></div>
+    <div class="form-grid" style="margin-bottom:10px">
+      <div class="form-group"><label>Categoria</label>
+        <select id="m-cat">
+          <option value="acordo">🤝 Acordo / Incentivo</option>
+          <option value="expansao">✈️ Expansão / Rotas</option>
+          <option value="financeiro">💰 Resultado financeiro</option>
+          <option value="concorrencia">⚔️ Concorrência</option>
+          <option value="regulatorio">⚖️ Regulatório</option>
+          <option value="outro">📌 Outro</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Data</label><input type="date" id="m-date" /></div>
+    </div>
+    <div class="form-group" style="margin-bottom:10px"><label>Conteúdo *</label><textarea id="m-content" style="min-height:110px" placeholder="Descreva o contexto e impacto..."></textarea></div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeMarketModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveMarketNote()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Seed Data (do Excel CRM_Cia_Aerea_Template.xlsx) ───
+const SEED_DATA = {
+  'LATAM': {
+    profile: {
+      iata:'LA', tipo:'ambas', pais:'Brasil / Chile',
+      website:'https://www.latam.com',
+      obs:'Negociação de novo override em andamento. Claudia de férias até 23/06 — acionar Ellen.',
+      at:'override', as:'ativo',
+      ai:'2026-01-01', af:'2026-12-31',
+      ap:'3.0% acima da meta', am:'R$ 80M/ano',
+      ao:'Renegociação em curso. Solicitaram +2pp no override. Revisar contraproposta até 15/06.',
+      contacts:[
+        {name:'Claudia Frigeri',role:'Account Manager',email:'claudia.frigeri@latam.com',phone:'+55 21 98124-8542'},
+        {name:'Ellen Conceição',role:'Account Manager (backup)',email:'ellen.conceicao@latam.com',phone:'+55 21 98124-8542'},
+        {name:'Camila Belinelli',role:'Gerente de Vendas',email:'camila.belinelli@latam.com',phone:'+55 11 98136-2674'},
+        {name:'Fabiane Batista',role:'Inteligência de Mercado',email:'fabiane.batista@latam.com',phone:''},
+      ]
+    },
+    visits:[
+      {id:'INT-001',date:'2026-06-05',start:'09:00',end:'10:00',local:'',onfly:'Rodrigo',cia:'Claudia Frigeri',ciaEmails:'claudia.frigeri@latam.com',pauta:'Revisão de incentivo Q2',resultados:'Cliente apresentou volume crescente e solicitou revisão de override para +2pp.',proximos:'Levar contraproposta na próxima reunião dia 15/06',followup:'2026-06-15',status:'realizada'}
+    ],
+    market:[]
+  },
+  'GOL': {
+    profile: {
+      iata:'G3', tipo:'domestica', pais:'Brasil',
+      website:'https://www.voegol.com.br',
+      obs:'Markup ajustado em maio/26. Campanha pontual de markup reduzido em avaliação.',
+      at:'mix', as:'ativo',
+      ai:'2026-01-01', af:'2026-12-31',
+      ap:'2.5% override', am:'R$ 50M/ano',
+      ao:'Override + Incentivo Markup. Campanha pontual em avaliação com o time de pricing.',
+      contacts:[
+        {name:'Carolina da Silva Veiga',role:'Executiva Comercial',email:'csveiga@voegol.com.br',phone:''},
+        {name:'Anderson Wolff da Silva',role:'Executivo Comercial',email:'awsilva@voegol.com.br',phone:''},
+        {name:'Patrick F. Pomeroy',role:'Gestão BDA',email:'PFPOMEROY@voegol.com.br',phone:''},
+        {name:'Nathalia Vilas Boas',role:'Gestão BDA',email:'nvboas@voegol.com.br',phone:''},
+      ]
+    },
+    visits:[
+      {id:'INT-002',date:'2026-06-02',start:'09:00',end:'10:00',local:'',onfly:'Rodrigo',cia:'Gerente GOL',ciaEmails:'csveiga@voegol.com.br',pauta:'Quinzenal de performance',resultados:'Volume YTD em linha com meta. GOL pediu campanha pontual de markup reduzido.',proximos:'Validar com pricing e responder em 7 dias',followup:'2026-06-09',status:'realizada'}
+    ],
+    market:[]
+  },
+  'AZUL': {
+    profile: {
+      iata:'AD', tipo:'ambas', pais:'Brasil',
+      website:'https://www.voeazul.com.br',
+      obs:'Avaliando rota internacional via Recife. Acordo vence em 30/06 — urgente renovar.',
+      at:'override', as:'ativo',
+      ai:'2025-07-01', af:'2026-06-30',
+      ap:'2.0% acima da meta', am:'R$ 30M/ano',
+      ao:'Renovação vence em 30 dias. Filipe enviando metas mensais. Portas Abertas 19/06.',
+      contacts:[
+        {name:'Filipe Boschini Alves',role:'Executivo de Contas SR',email:'filipe.alves@voeazul.com.br',phone:'+55 11 99595-9453'},
+        {name:'Dorothy H. Gonçalves',role:'Apoio Comercial',email:'dorothy.hgoncalves@voeazul.com.br',phone:''},
+      ]
+    },
+    visits:[
+      {id:'INT-004',date:'2026-05-28',start:'09:00',end:'10:00',local:'',onfly:'Rodrigo',cia:'Filipe Boschini Alves',ciaEmails:'filipe.alves@voeazul.com.br',pauta:'Avaliação de rota internacional',resultados:'Azul demonstrou interesse em rotas internacionais via Recife.',proximos:'Avaliar volumes estimados e agendar revisão trimestral',followup:'2026-06-20',status:'realizada'}
+    ],
+    market:[]
+  },
+  'AIR FRANCE': {
+    profile: {
+      iata:'AF', tipo:'internacional', pais:'França / Holanda',
+      website:'https://www.airfranceklm.com',
+      obs:'Primeira rodada concluída. Proposta formal em elaboração.',
+      at:'override', as:'em_negociacao',
+      ai:'', af:'',
+      ap:'A definir', am:'A definir',
+      ao:'Proposta em elaboração. NDC via Amadeus NDCX disponível. Contato indoor via mail.rssu.sam@airfrance.fr',
+      contacts:[
+        {name:'Eliza Kim',role:'Account Manager',email:'eliza.kim@airfranceklm.com',phone:'+55 11 98117-4218'},
+        {name:'Paulo Cruz',role:'Sales Manager',email:'Paulo.Cruz@airfranceklm.com',phone:''},
+        {name:'Gisele Beiker',role:'Indoor Sales',email:'gisele.beiker@airfranceklm.com',phone:''},
+      ]
+    },
+    visits:[
+      {id:'INT-003',date:'2026-05-30',start:'09:00',end:'10:00',local:'',onfly:'Rodrigo',cia:'Eliza Kim',ciaEmails:'eliza.kim@airfranceklm.com',pauta:'Primeira rodada de negociação',resultados:'Apresentação de capacidade Onfly. Boa recepção. Solicitaram proposta formal.',proximos:'Enviar proposta até 10/06',followup:'2026-06-10',status:'realizada'}
+    ],
+    market:[]
+  },
+  'KLM': {
+    profile: {
+      iata:'KL', tipo:'internacional', pais:'França / Holanda',
+      website:'https://www.klm.com',
+      obs:'Mesmo relacionamento que Air France — grupo AFKL.',
+      at:'override', as:'em_negociacao',
+      ai:'', af:'', ap:'A definir', am:'A definir',
+      ao:'Mesmos contatos Air France-KLM.',
+      contacts:[
+        {name:'Eliza Kim',role:'Account Manager',email:'eliza.kim@airfranceklm.com',phone:'+55 11 98117-4218'},
+        {name:'Paulo Cruz',role:'Sales Manager',email:'Paulo.Cruz@airfranceklm.com',phone:''},
+      ]
+    },
+    visits:[], market:[]
+  },
+  'EMIRATES': {
+    profile: {
+      iata:'EK', tipo:'internacional', pais:'EAU',
+      website:'https://www.emirates.com/br',
+      obs:'Contrato social enviado via DocuSign. Aguardando assinatura. Incentivo upfront ativo até set/26.',
+      at:'mix', as:'em_negociacao',
+      ai:'2026-04-01', af:'2026-09-30',
+      ap:'A definir', am:'A definir',
+      ao:'Override + GDS Bonus. Incentivo upfront TOUR ZZBTA2ZZ. Acordo sendo formalizado.',
+      contacts:[
+        {name:'Kátia Leite',role:'Senior Sales Executive',email:'katia.leite@emirates.com',phone:'+55 21 99868-1619'},
+        {name:'Priscilla Montalegre Jorge',role:'Senior Sales Support Agent',email:'priscilla.montalegrejorge@emirates.com',phone:'+55 21 3795-2325'},
+        {name:'Cristiane Fagundes',role:'SAO RTO Team Leader',email:'cristiane.fagundes@emirates.com',phone:''},
+      ]
+    },
+    visits:[
+      {id:'INT-005',date:'2026-06-01',start:'09:00',end:'10:00',local:'',onfly:'Rodrigo',cia:'Kátia Leite',ciaEmails:'katia.leite@emirates.com',pauta:'Confirmação dos termos discutidos',resultados:'Confirmação dos pontos da última call. Aguardando draft formal.',proximos:'Receber draft até 18/06',followup:'2026-06-18',status:'realizada'}
+    ],
+    market:[]
+  },
+  'AMERICAN': {
+    profile: {
+      iata:'AA', tipo:'internacional', pais:'EUA',
+      website:'https://www.aa.com',
+      obs:'Parceria em negociação. Julia indicou Leandro como ponto focal.',
+      at:'', as:'sem_acordo',
+      ai:'', af:'', ap:'', am:'',
+      ao:'Contato iniciado em mar/26. Grupos operacionais já funcionando via Brazil Groups.',
+      contacts:[
+        {name:'Julia Christina Yamanishi',role:'Executiva Comercial',email:'julia.c.yamanishi@aa.com',phone:''},
+        {name:'Ana Scortecci',role:'Grupos',email:'Ana.Scortecci@aa.com',phone:''},
+      ]
+    },
+    visits:[], market:[]
+  },
+  'UNITED': {
+    profile: {
+      iata:'UA', tipo:'internacional', pais:'EUA',
+      website:'https://www.united.com',
+      obs:'Programa backend ativo via Jetstream. Cátia Schick é gerente Brasil.',
+      at:'rebate', as:'ativo',
+      ai:'2026-05-01', af:'',
+      ap:'', am:'',
+      ao:'Enroll no Jetstream concluído. Rodrigo é responsável pela aprovação do programa.',
+      contacts:[
+        {name:'Monica Ludwig Pereira',role:'Executiva Comercial',email:'monica.ludwigpereira@united.com',phone:''},
+        {name:'Catia Schick',role:'Gerente Brasil',email:'catia.schick@united.com',phone:''},
+      ]
+    },
+    visits:[], market:[]
+  },
+  'COPA': {
+    profile: {
+      iata:'CM', tipo:'internacional', pais:'Panamá',
+      website:'https://www.copaair.com',
+      obs:'NDC ativo via Spark/Wooba. Cristiane Cortizo é exec. de vendas SP.',
+      at:'override', as:'em_negociacao',
+      ai:'', af:'', ap:'A definir', am:'A definir',
+      ao:'Formalização de acordo comercial em andamento. Fabiano lidera do lado da Copa.',
+      contacts:[
+        {name:'Monica Tenda Afonso',role:'Gerente Geral Brasil',email:'mtenda@copaair.com',phone:'+55 21 97660-8520'},
+        {name:'Cristiane Cortizo',role:'Executiva de Vendas SP',email:'ccortizo@copaair.com',phone:'+55 11 95654-4057'},
+        {name:'Luiz Fabiano Araujo Dias',role:'Gerente Comercial',email:'faDias@copaair.com',phone:''},
+      ]
+    },
+    visits:[], market:[]
+  },
+  'TAP': {
+    profile: {
+      iata:'TP', tipo:'internacional', pais:'Portugal',
+      website:'https://www.flytap.com',
+      obs:'Backend ativo. Acordo Hotmart em risco de não renovação por baixa produtividade.',
+      at:'rebate', as:'ativo',
+      ai:'2025-01-01', af:'2026-06-30',
+      ap:'Backend', am:'',
+      ao:'Roberta cuida de Centro-Oeste/MG. Carolina Candido processa pagamentos. Carlos Antunas também é contato.',
+      contacts:[
+        {name:'Roberta Brito dos Santos',role:'Key Account - CO e MG',email:'rbsantos@tap.pt',phone:''},
+        {name:'Carolina Candido',role:'Vendas e IM Brasil',email:'ccandido@tap.pt',phone:''},
+        {name:'Carlos Antunas',role:'Comercial',email:'cantunes@tap.pt',phone:''},
+      ]
+    },
+    visits:[], market:[]
+  },
+  'QATAR': {
+    profile: {
+      iata:'QR', tipo:'internacional', pais:'Catar',
+      website:'https://www.qatarairways.com/br',
+      obs:'Condições comerciais ativas até mar/27. 4% adicional prorrogado. Vivian Suenaga também é contato.',
+      at:'incentivo', as:'ativo',
+      ai:'2026-04-01', af:'2027-03-31',
+      ap:'4% adicional', am:'',
+      ao:'Tour code TOUR code definido. Emitir direto, não via consolidador. Reunião presencial feita em 11/jun.',
+      contacts:[
+        {name:'Francys Rivas',role:'Sales Manager Corporate',email:'frivas@br.qatarairways.com',phone:''},
+        {name:'Vivian Suenaga',role:'Sales Executive',email:'vsuenaga@br.qatarairways.com',phone:''},
+      ]
+    },
+    visits:[], market:[]
+  },
+};
+
+// ── Seed key matching ──────────────────────────────────
+function findSeedKey(airlineName){
+  if(!airlineName) return null;
+  const u=airlineName.toUpperCase().trim();
+  if(SEED_DATA[u]) return u;
+  for(const key of Object.keys(SEED_DATA)){
+    if(u.includes(key) || key.split(' ').some(w=>w.length>2&&u.includes(w))) return key;
+  }
+  return null;
+}
+
+// ── State ──────────────────────────────────────────────
+let currentAirline = null;
+let trendChart = null, splitChart = null, channelChart = null;
+
+// ── Canal categorization ───────────────────────────────
+function catConsol(c, selectedAirline){
+  if(!c) return 'Desconhecido';
+  const u=c.toUpperCase().trim();
+  const sel=(selectedAirline||'').toUpperCase().trim();
+  if(u.includes('AMADEUS')) return 'GDS (Amadeus)';
+  if(u.startsWith('IATA')) return 'IATA / Acordo';
+  if(u==='GRUPOS-EVENTOS') return 'Grupos & Eventos';
+  if(u.includes('FLYTOUR')||u.includes('REXTUR')||u.includes('CONFIA')||u==='BRT'||u.includes('SAKURA')||u==='CONSOLID'||u.includes('WOOBA')||u==='FLIGHT'||u==='CONSOLIDAMADEUS') return 'Consolidador';
+  const selWords=sel.split(/\s+/);
+  if(sel && selWords.some(w=>w.length>2 && u.includes(w))) return 'Direto (Cia)';
+  const airlines=['LATAM','AZUL','GOL','DELTA','AVIANCA','COPA','TAP','KLM','IBERIA','EMIRATES','QATAR','UNITED','AMERICAN','AEROLINEAS','VIVA','VOLARIS','AEROVIAS','LAN','AIR FRANCE','LUFTHANSA','LUFHANSA'];
+  if(airlines.some(a=>u.includes(a))) return 'Codeshare / Outra Cia';
+  return 'Outros';
+}
+const catColors={'Direto (Cia)':'#0064FF','GDS (Amadeus)':'#f59e0b','Consolidador':'#10b981','IATA / Acordo':'#8b5cf6','Grupos & Eventos':'#ec4899','Codeshare / Outra Cia':'#06b6d4','Desconhecido':'#9ca3af','Outros':'#6b7280'};
+
+// ── localStorage ───────────────────────────────────────
+const CRM_KEY = 'crm_aereo_v1';
+function getCRM(){ try{ return JSON.parse(localStorage.getItem(CRM_KEY)||'{}'); }catch{ return {}; } }
+function saveCRM(d){ localStorage.setItem(CRM_KEY, JSON.stringify(d)); }
+function getAD(a){
+  const c=getCRM();
+  const d=c[a];
+  const isEmpty=!d || (!d.profile?.iata && !d.profile?.contacts?.length && !d.visits?.length);
+  if(isEmpty){
+    const sk=findSeedKey(a);
+    c[a]= sk && SEED_DATA[sk] ? JSON.parse(JSON.stringify(SEED_DATA[sk])) : {profile:{},visits:[],market:[]};
+    saveCRM(c);
+  }
+  return c[a];
+}
+function saveAD(a,d){ const c=getCRM(); c[a]=d; saveCRM(c); }
+
+// ── BQ (dados pré-carregados pelo Streamlit) ───────────
+async function bq(sql){
+  const d = (window.__CRM__ || {}).transacional || {};
+  if(sql.includes('avg_t'))                        return d.stats    || [];
+  if(sql.includes('origin_destination_'))           return d.routes   || [];
+  if(sql.includes('FORMAT_DATE'))                   return d.trend    || [];
+  if(sql.includes('COALESCE(TRIM(consolidator)'))   return d.channels || [];
+  if(sql.includes('total_mundo'))                   return d.totals   || [];
+  if(sql.includes("IN ('GOL','AZUL','LATAM')"))     return d.nationals|| [];
+  return [];
+}
+
+// ── Format helpers ─────────────────────────────────────
+function fmtM(v){ if(!v) return 'R$ 0'; const n=parseFloat(v); if(n>=1e6) return 'R$ '+(n/1e6).toFixed(1)+'M'; if(n>=1e3) return 'R$ '+(n/1e3).toFixed(0)+'k'; return 'R$ '+n.toFixed(0); }
+function fmtN(v){ return v ? parseInt(v).toLocaleString('pt-BR') : '0'; }
+function fmtD(d){ if(!d) return ''; return new Date(d+'T12:00:00').toLocaleDateString('pt-BR'); }
+function esc(s){ return (s||'').replace(/'/g,"\\'"); }
+
+// ── Period ─────────────────────────────────────────────
+function initPeriod(){
+  const now=new Date();
+  const to=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  const fd=new Date(now.getFullYear(), now.getMonth()-5, 1);
+  const from=`${fd.getFullYear()}-${String(fd.getMonth()+1).padStart(2,'0')}`;
+  document.getElementById('from-month').value=from;
+  document.getElementById('to-month').value=to;
+}
+function getPeriod(){
+  const from=document.getElementById('from-month').value;
+  const to=document.getElementById('to-month').value;
+  const [ty,tm]=to.split('-').map(Number);
+  const lastDay=new Date(ty,tm,0).getDate();
+  return { fromDate:from+'-01', toDate:`${to}-${lastDay}` };
+}
+
+// ── Tabs ───────────────────────────────────────────────
+function switchTab(tab){
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('tab-'+tab).classList.add('active');
+  document.querySelector(`[data-tab="${tab}"]`).classList.add('active');
+  if(!currentAirline) return;
+  if(tab==='perfil') renderPerfil();
+  if(tab==='visitas') renderVisitas();
+  if(tab==='mercado') renderMercado();
+}
+
+// ── Load Airlines ──────────────────────────────────────
+async function loadAirlines(){
+  const sel=document.getElementById('airline-select');
+  try{
+    const rows=await bq(`
+      SELECT TRIM(standard_airline) as a, COUNT(DISTINCT protocol) as c
+      FROM \`dw-onfly-prd.travel_core.silver_flight_orders\`
+      WHERE partition_date >= DATE_SUB(CURRENT_DATE(), INTERVAL 12 MONTH)
+        AND standard_airline IS NOT NULL
+      GROUP BY 1 ORDER BY 2 DESC LIMIT 35`);
+    sel.innerHTML='<option value="">— Selecione uma cia aérea —</option>';
+    rows.forEach(r=>{ const o=document.createElement('option'); o.value=r.a; o.textContent=`${r.a} (${fmtN(r.c)} tickets)`; sel.appendChild(o); });
+  }catch(e){
+    console.error('[loadAirlines]',e);
+    sel.innerHTML=`<option value="">Erro: ${e.message}</option>`;
+  }
+  sel.onchange=e=>{
+    currentAirline=e.target.value||null;
+    if(!currentAirline) return;
+    const at=document.querySelector('.tab-btn.active')?.dataset.tab;
+    if(at==='transacional') loadTransacional();
+    else if(at==='perfil') renderPerfil();
+    else if(at==='visitas') renderVisitas();
+    else if(at==='mercado') renderMercado();
+  };
+}
+
+// ── TRANSACIONAL ───────────────────────────────────────
+async function loadTransacional(){
+  if(!currentAirline){ document.getElementById('transacional-content').innerHTML='<div class="empty-state"><div class="icon">✈️</div><p>Selecione uma cia aérea</p></div>'; return; }
+  const {fromDate,toDate}=getPeriod();
+  const c=document.getElementById('transacional-content');
+  c.innerHTML='<div class="loading"><div class="spinner"></div> Consultando BigQuery...</div>';
+  if(trendChart){trendChart.destroy();trendChart=null;}
+  if(splitChart){splitChart.destroy();splitChart=null;}
+  if(channelChart){channelChart.destroy();channelChart=null;}
+  const a=currentAirline.trim();
+  const w=`TRIM(standard_airline)='${esc(a)}' AND partition_date BETWEEN '${fromDate}' AND '${toDate}' AND DATE(purchase_date) BETWEEN '${fromDate}' AND '${toDate}'`;
+  const wDate=`partition_date BETWEEN '${fromDate}' AND '${toDate}' AND DATE(purchase_date) BETWEEN '${fromDate}' AND '${toDate}'`;
+  try{
+    const [stats,routes,trend,channels,totals,nationalsRow]=await Promise.all([
+      bq(`SELECT COUNT(DISTINCT protocol) as tickets, ROUND(SUM(COALESCE(onfly_amount_currency_brl,onfly_amount)-COALESCE(amount_taxes_v3_currency_brl,amount_taxes_v3,0)),2) as net, ROUND(AVG(COALESCE(onfly_amount_currency_brl,onfly_amount)-COALESCE(amount_taxes_v3_currency_brl,amount_taxes_v3,0)),2) as avg_t, COUNTIF(is_international=TRUE) as intl, COUNTIF(is_international=FALSE OR is_international IS NULL) as dom, COUNTIF(has_agreement=TRUE) as agree, ROUND(SUM(COALESCE(total_amount_currency_brl,total_amount)),2) as gmv, ROUND(SUM(COALESCE(amount_fares_v3_currency_brl,amount_fares_v3,0)),2) as fare_base, ROUND(SUM(CASE WHEN is_international=FALSE OR is_international IS NULL THEN COALESCE(total_amount_currency_brl,total_amount) ELSE 0 END),2) as dom_gmv FROM \`dw-onfly-prd.travel_core.silver_flight_orders\` WHERE ${w}`),
+      bq(`SELECT COALESCE(NULLIF(TRIM(origin_destination_),''),CONCAT(TRIM(origin),'-',TRIM(destination))) as rota, COUNT(DISTINCT protocol) as t, ROUND(SUM(COALESCE(onfly_amount_currency_brl,onfly_amount)-COALESCE(amount_taxes_v3_currency_brl,amount_taxes_v3,0)),2) as net, COUNTIF(is_international=TRUE) as intl FROM \`dw-onfly-prd.travel_core.silver_flight_orders\` WHERE ${w} GROUP BY 1 ORDER BY 2 DESC LIMIT 12`),
+      bq(`SELECT FORMAT_DATE('%Y-%m',DATE(purchase_date)) as mo, COUNT(DISTINCT protocol) as t, ROUND(SUM(COALESCE(onfly_amount_currency_brl,onfly_amount)-COALESCE(amount_taxes_v3_currency_brl,amount_taxes_v3,0)),2) as net FROM \`dw-onfly-prd.travel_core.silver_flight_orders\` WHERE ${w} GROUP BY 1 ORDER BY 1`),
+      bq(`SELECT COALESCE(TRIM(consolidator),'Desconhecido') as consolidator, COUNT(DISTINCT protocol) as t, ROUND(SUM(COALESCE(onfly_amount_currency_brl,onfly_amount)-COALESCE(amount_taxes_v3_currency_brl,amount_taxes_v3,0)),2) as net FROM \`dw-onfly-prd.travel_core.silver_flight_orders\` WHERE ${w} GROUP BY 1 ORDER BY 2 DESC`),
+      bq(`SELECT ROUND(SUM(COALESCE(total_amount_currency_brl,total_amount)),2) as total_mundo, ROUND(SUM(CASE WHEN is_international=FALSE OR is_international IS NULL THEN COALESCE(total_amount_currency_brl,total_amount) ELSE 0 END),2) as total_br FROM \`dw-onfly-prd.travel_core.silver_flight_orders\` WHERE ${wDate}`),
+      bq(`SELECT TRIM(standard_airline) as cia, ROUND(SUM(CASE WHEN is_international=FALSE OR is_international IS NULL THEN COALESCE(total_amount_currency_brl,total_amount) ELSE 0 END),2) as gmv_br FROM \`dw-onfly-prd.travel_core.silver_flight_orders\` WHERE TRIM(standard_airline) IN ('GOL','AZUL','LATAM') AND ${wDate} GROUP BY 1`)
+    ]);
+    const s=stats[0]||{};
+    const tickets=parseInt(s.tickets||0), net=parseFloat(s.net||0), avgT=parseFloat(s.avg_t||0);
+    const dom=parseInt(s.dom||0), intl=parseInt(s.intl||0);
+    const agreePct=tickets?(parseInt(s.agree||0)/tickets*100).toFixed(2):0;
+    const intlPct=tickets?(intl/tickets*100).toFixed(2):0;
+    const tot=totals[0]||{};
+    const totalMundo=parseFloat(tot.total_mundo||0), totalBr=parseFloat(tot.total_br||0);
+    const domGmv=parseFloat(s.dom_gmv||0), airlineGmv=parseFloat(s.gmv||0);
+    const isNational=['GOL','AZUL','LATAM'].some(n=>a.toUpperCase().includes(n));
+    let shareBr='—';
+    if(isNational){
+      const natTotal=(nationalsRow||[]).reduce((sum,r)=>sum+parseFloat(r.gmv_br||0),0);
+      if(natTotal&&domGmv) shareBr=((domGmv/natTotal)*100).toFixed(2)+'%';
+    } else {
+      if(totalBr&&domGmv) shareBr=((domGmv/totalBr)*100).toFixed(2)+'%';
+    }
+    const shareMundo=(airlineGmv&&totalMundo)?((airlineGmv/totalMundo)*100).toFixed(2)+'%':'—';
+    const shareBrLabel=isNational?'vs GOL+AZUL+LATAM':'vs total Onfly';
+    c.innerHTML=`
+      <div class="kpis">
+        <div class="kpi-card"><div class="kpi-label">Bilhetes</div><div class="kpi-value">${fmtN(tickets)}</div><div class="kpi-sub">${intlPct}% internacionais</div></div>
+        <div class="kpi-card"><div class="kpi-label">GMV Total</div><div class="kpi-value">${fmtM(s.gmv)}</div><div class="kpi-sub">valor total emitido</div></div>
+        <div class="kpi-card"><div class="kpi-label">Receita Líquida</div><div class="kpi-value">${fmtM(net)}</div><div class="kpi-sub">onfly amount - taxas</div></div>
+        <div class="kpi-card"><div class="kpi-label">Ticket Médio</div><div class="kpi-value">${fmtM(avgT)}</div><div class="kpi-sub">por bilhete</div></div>
+        <div class="kpi-card"><div class="kpi-label">Com Acordo</div><div class="kpi-value">${agreePct}%</div><div class="kpi-sub">${fmtN(s.agree)} bilhetes</div></div>
+        <div class="kpi-card" style="border-left:3px solid #8b5cf6">
+          <div class="kpi-label">Fare Base (visão cia)</div>
+          <div class="kpi-value" style="color:#8b5cf6">${fmtM(s.fare_base)}</div>
+          <div class="kpi-sub">onfly_amount − taxas − markup</div>
+        </div>
+        <div class="kpi-card" style="border-left:3px solid #0064FF">
+          <div class="kpi-label">Take Rate</div>
+          <div class="kpi-value" style="color:#0064FF">${(s.fare_base&&s.gmv)?(100-(s.fare_base/s.gmv)*100).toFixed(2)+'%':'—'}</div>
+          <div class="kpi-sub">100% − (fare base ÷ GMV)</div>
+        </div>
+        <div class="kpi-card" style="border-left:3px solid #10b981">
+          <div class="kpi-label">Share (BR)</div>
+          <div class="kpi-value" style="color:#10b981">${shareBr}</div>
+          <div class="kpi-sub">${shareBrLabel}</div>
+        </div>
+        <div class="kpi-card" style="border-left:3px solid #f59e0b">
+          <div class="kpi-label">Share Mundo</div>
+          <div class="kpi-value" style="color:#f59e0b">${shareMundo}</div>
+          <div class="kpi-sub">GMV total ÷ todas as cias Onfly</div>
+        </div>
+      </div>
+      <div class="charts-grid">
+        <div class="card"><div class="card-header"><span class="card-title">📈 Evolução Mensal (bilhetes)</span></div><div class="card-body"><div class="chart-container"><canvas id="trend-chart"></canvas></div></div></div>
+        <div class="card"><div class="card-header"><span class="card-title">🌍 Dom vs Internacional</span></div><div class="card-body"><div class="chart-container"><canvas id="split-chart"></canvas></div></div></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><span class="card-title">🛫 Top Rotas</span></div>
+        <div class="card-body" style="padding:0">
+          <table>
+            <thead><tr><th>Rota</th><th>Bilhetes</th><th>Receita Líq.</th><th>Tipo</th></tr></thead>
+            <tbody id="routes-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><span class="card-title">🔀 Canal de Emissão</span></div>
+        <div class="card-body">
+          <div class="charts-grid" style="margin-bottom:0">
+            <div><div class="chart-container" style="height:200px"><canvas id="channel-chart"></canvas></div></div>
+            <div style="overflow-x:auto">
+              <table>
+                <thead><tr><th>Consolidador</th><th>Canal</th><th>Bilhetes</th><th>% Total</th><th>Receita Líq.</th></tr></thead>
+                <tbody id="channel-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>`;
+    const tb=document.getElementById('routes-tbody');
+    if(!routes.length){ tb.innerHTML='<tr><td colspan="4" style="text-align:center;padding:18px;color:var(--gray)">Nenhuma rota encontrada</td></tr>'; }
+    else routes.forEach(r=>{ const tr=document.createElement('tr'); tr.innerHTML=`<td><strong>${r.rota||'-'}</strong></td><td>${fmtN(r.t)}</td><td>${fmtM(r.net)}</td><td><span class="badge ${parseInt(r.intl||0)>0?'badge-blue':'badge-green'}">${parseInt(r.intl||0)>0?'Intl':'Dom'}</span></td>`; tb.appendChild(tr); });
+    requestAnimationFrame(()=>{
+      const ctb=document.getElementById('channel-tbody');
+      if(ctb && channels.length){
+        const catAgg={};
+        channels.forEach(r=>{
+          const cat=catConsol(r.consolidator, currentAirline);
+          if(!catAgg[cat]) catAgg[cat]={tickets:0,net:0};
+          catAgg[cat].tickets+=parseInt(r.t||0);
+          catAgg[cat].net+=parseFloat(r.net||0);
+        });
+        channels.forEach(r=>{
+          const cat=catConsol(r.consolidator, currentAirline);
+          const pct=tickets?((parseInt(r.t||0)/tickets)*100).toFixed(1):'0';
+          const tr=document.createElement('tr');
+          tr.innerHTML=`<td><strong>${r.consolidator}</strong></td><td><span style="font-size:11px;font-weight:600;padding:2px 7px;border-radius:20px;background:${catColors[cat]}22;color:${catColors[cat]}">${cat}</span></td><td>${fmtN(r.t)}</td><td>${pct}%</td><td>${fmtM(r.net)}</td>`;
+          ctb.appendChild(tr);
+        });
+        const cCtx=document.getElementById('channel-chart')?.getContext('2d');
+        if(cCtx){
+          const catEntries=Object.entries(catAgg).sort((a,b)=>b[1].tickets-a[1].tickets);
+          channelChart=new Chart(cCtx,{type:'doughnut',data:{labels:catEntries.map(e=>e[0]),datasets:[{data:catEntries.map(e=>e[1].tickets),backgroundColor:catEntries.map(e=>catColors[e[0]]||'#9ca3af'),borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:11},boxWidth:12}},tooltip:{callbacks:{label:ctx=>` ${ctx.label}: ${fmtN(ctx.raw)} (${tickets?((ctx.raw/tickets)*100).toFixed(1):0}%)`}}}}});
+        }
+      }
+      const tCtx=document.getElementById('trend-chart')?.getContext('2d');
+      if(tCtx && trend.length){ trendChart=new Chart(tCtx,{type:'line',data:{labels:trend.map(r=>r.mo),datasets:[{label:'Bilhetes',data:trend.map(r=>parseInt(r.t)),borderColor:'#0064FF',backgroundColor:'rgba(0,100,255,.1)',fill:true,tension:.3,pointRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,grid:{color:'#f3f4f6'}},x:{grid:{display:false}}}}}); }
+      const sCtx=document.getElementById('split-chart')?.getContext('2d');
+      if(sCtx && (dom+intl)>0){ splitChart=new Chart(sCtx,{type:'doughnut',data:{labels:['Doméstico','Internacional'],datasets:[{data:[dom,intl],backgroundColor:['#10b981','#0064FF'],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'},tooltip:{callbacks:{label:ctx=>` ${ctx.label}: ${fmtN(ctx.raw)} (${Math.round(ctx.raw/(dom+intl)*100)}%)`}}}}}); }
+    });
+  }catch(e){ c.innerHTML=`<div class="empty-state"><div class="icon">⚠️</div><p>Erro: ${e.message}</p></div>`; }
+}
+
+// ── PERFIL ─────────────────────────────────────────────
+function renderPerfil(){
+  if(!currentAirline) return;
+  const d=getAD(currentAirline), p=d.profile||{};
+  const sel=(f,v)=>v===f?'selected':'';
+  document.getElementById('perfil-content').innerHTML=`
+    <div class="card">
+      <div class="card-header"><span class="card-title">🏢 Perfil — ${currentAirline}</span><div style="display:flex;gap:6px"><button class="btn btn-outline btn-sm" onclick="resetPerfil()" title="Recarrega dados do Excel">↺ Resetar</button><button class="btn btn-primary btn-sm" onclick="savePerfil()">💾 Salvar</button></div></div>
+      <div class="card-body">
+        <p class="section-title">Dados Gerais</p>
+        <div class="form-grid">
+          <div class="form-group"><label>Código IATA</label><input id="p-iata" value="${p.iata||''}" placeholder="LA, G3, AD..." /></div>
+          <div class="form-group"><label>Tipo</label><select id="p-tipo"><option value="domestica" ${sel(p.tipo,'domestica')}>Doméstica</option><option value="internacional" ${sel(p.tipo,'internacional')}>Internacional</option><option value="ambas" ${sel(p.tipo,'ambas')}>Dom + Intl</option></select></div>
+          <div class="form-group"><label>País</label><input id="p-pais" value="${p.pais||''}" placeholder="Brasil, EUA..." /></div>
+          <div class="form-group"><label>Portal / Website</label><input id="p-website" value="${p.website||''}" placeholder="https://..." /></div>
+        </div>
+        <div class="form-group" style="margin-top:14px"><label>Observações Gerais</label><textarea id="p-obs">${p.obs||''}</textarea></div>
+        <hr class="divider">
+        <p class="section-title">Acordo Comercial</p>
+        <div class="form-grid">
+          <div class="form-group"><label>Tipo de Acordo</label><select id="p-at"><option value="" ${sel(p.at,'')}>Nenhum</option><option value="rebate" ${sel(p.at,'rebate')}>Rebate</option><option value="override" ${sel(p.at,'override')}>Override</option><option value="incentivo" ${sel(p.at,'incentivo')}>Incentivo volume</option><option value="direto" ${sel(p.at,'direto')}>Acordo direto</option><option value="mix" ${sel(p.at,'mix')}>Mix</option></select></div>
+          <div class="form-group"><label>Status</label><select id="p-as"><option value="ativo" ${sel(p.as||'ativo','ativo')}>Ativo</option><option value="em_negociacao" ${sel(p.as,'em_negociacao')}>Em negociação</option><option value="vencido" ${sel(p.as,'vencido')}>Vencido</option><option value="sem_acordo" ${sel(p.as,'sem_acordo')}>Sem acordo</option></select></div>
+          <div class="form-group"><label>Vigência Início</label><input type="date" id="p-ai" value="${p.ai||''}" /></div>
+          <div class="form-group"><label>Vigência Fim</label><input type="date" id="p-af" value="${p.af||''}" /></div>
+          <div class="form-group"><label>% Rebate / Override</label><input id="p-ap" value="${p.ap||''}" placeholder="3.5%" /></div>
+          <div class="form-group"><label>Meta de Volume</label><input id="p-am" value="${p.am||''}" placeholder="R$ 50M / ano" /></div>
+        </div>
+        <div class="form-group" style="margin-top:14px"><label>Detalhes do Acordo</label><textarea id="p-ao">${p.ao||''}</textarea></div>
+        <hr class="divider">
+        <p class="section-title">Contatos</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1.4fr 1fr 28px;gap:6px;margin-bottom:6px;font-size:10px;font-weight:700;color:var(--gray);text-transform:uppercase">
+          <span>Nome</span><span>Cargo</span><span>Email</span><span>Telefone</span><span></span>
+        </div>
+        <div id="contacts-list">${renderContacts(p.contacts||[])}</div>
+        <button class="btn btn-outline btn-sm" onclick="addContact()" style="margin-top:8px">+ Contato</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">📧 E-mails Recentes</span><button class="btn btn-outline btn-sm" onclick="loadGmail()">Carregar</button></div>
+      <div class="card-body" id="gmail-content"><p style="font-size:13px;color:var(--gray)">Clique em "Carregar" para buscar e-mails relacionados a esta cia.</p></div>
+    </div>`;
+}
+function renderContacts(cs){
+  if(!cs.length) cs=[{name:'',role:'',email:'',phone:''}];
+  return cs.map((c,i)=>`<div class="contact-row"><input value="${c.name||''}" placeholder="Nome" onchange="updateContact(this,${i},'name')"/><input value="${c.role||''}" placeholder="Cargo" onchange="updateContact(this,${i},'role')"/><input value="${c.email||''}" placeholder="email@..." onchange="updateContact(this,${i},'email')"/><input value="${c.phone||''}" placeholder="(11)..." onchange="updateContact(this,${i},'phone')"/><button class="icon-btn" onclick="rmContact(${i})">✕</button></div>`).join('');
+}
+function addContact(){ const d=getAD(currentAirline); if(!d.profile.contacts) d.profile.contacts=[]; d.profile.contacts.push({name:'',role:'',email:'',phone:''}); saveAD(currentAirline,d); document.getElementById('contacts-list').innerHTML=renderContacts(d.profile.contacts); }
+function rmContact(i){ const d=getAD(currentAirline); d.profile.contacts=(d.profile.contacts||[]).filter((_,j)=>j!==i); saveAD(currentAirline,d); document.getElementById('contacts-list').innerHTML=renderContacts(d.profile.contacts); }
+function updateContact(el,i,f){ const d=getAD(currentAirline); if(!d.profile.contacts) d.profile.contacts=[]; if(!d.profile.contacts[i]) d.profile.contacts[i]={}; d.profile.contacts[i][f]=el.value; saveAD(currentAirline,d); }
+function resetPerfil(){
+  if(!currentAirline) return;
+  if(!confirm('Recarregar dados do Excel para esta cia? Alterações salvas serão perdidas.')) return;
+  const c=getCRM(); delete c[currentAirline]; saveCRM(c);
+  renderPerfil();
+}
+function savePerfil(){
+  if(!currentAirline) return;
+  const d=getAD(currentAirline);
+  const contacts=[...document.querySelectorAll('.contact-row')].map(row=>{ const ins=row.querySelectorAll('input'); return {name:ins[0].value,role:ins[1].value,email:ins[2].value,phone:ins[3].value}; });
+  d.profile={ iata:document.getElementById('p-iata').value, tipo:document.getElementById('p-tipo').value, pais:document.getElementById('p-pais').value, website:document.getElementById('p-website').value, obs:document.getElementById('p-obs').value, at:document.getElementById('p-at').value, as:document.getElementById('p-as').value, ai:document.getElementById('p-ai').value, af:document.getElementById('p-af').value, ap:document.getElementById('p-ap').value, am:document.getElementById('p-am').value, ao:document.getElementById('p-ao').value, contacts };
+  saveAD(currentAirline,d);
+  const btn=document.querySelector('[onclick="savePerfil()"]'); btn.textContent='✅ Salvo!'; setTimeout(()=>btn.textContent='💾 Salvar',2000);
+}
+
+// ── VISITAS ────────────────────────────────────────────
+function renderVisitas(){
+  if(!currentAirline) return;
+  const d=getAD(currentAirline);
+  const vs=(d.visits||[]).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const statusBadge={realizada:'<span class="badge badge-green">Realizada</span>',planejada:'<span class="badge badge-yellow">Planejada</span>',cancelada:'<span class="badge badge-red">Cancelada</span>'};
+  let html=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px"><h3 style="font-size:14px;font-weight:600">${vs.length} visita${vs.length!==1?'s':''}</h3><button class="btn btn-primary" onclick="openVisitModal()">+ Nova Visita</button></div>`;
+  if(!vs.length){ html+='<div class="empty-state"><div class="icon">📋</div><p>Nenhuma visita registrada.<br>Clique em "+ Nova Visita".</p></div>'; }
+  else vs.forEach(v=>{ html+=`<div class="visit-item"><div class="visit-header"><div><span class="visit-date-badge">${fmtD(v.date)}</span>${v.local?`<div class="visit-location">📍 ${v.local}</div>`:''}</div><div style="display:flex;gap:6px;align-items:center">${statusBadge[v.status||'realizada']||''}<button class="btn btn-outline btn-sm" onclick="openVisitModal('${v.id}')">✏️</button><button class="btn btn-danger btn-sm" onclick="delVisit('${v.id}')">🗑</button></div></div><div class="visit-tags">${v.onfly?`<span class="tag tag-blue">👤 ${v.onfly}</span>`:''} ${v.cia?`<span class="tag">🤝 ${v.cia}</span>`:''}</div>${v.pauta?`<div class="vf"><div class="vf-label">Pauta</div><div class="vf-value">${v.pauta}</div></div>`:''} ${v.resultados?`<div class="vf"><div class="vf-label">Resultados</div><div class="vf-value">${v.resultados}</div></div>`:''} ${v.proximos?`<div class="vf"><div class="vf-label">Próximos Passos</div><div class="vf-value">${v.proximos}</div></div>`:''} ${v.followup?`<div style="margin-top:10px"><span class="badge badge-yellow">📅 Follow-up: ${fmtD(v.followup)}</span></div>`:''}</div>`; });
+  document.getElementById('visitas-content').innerHTML=html;
+}
+function openVisitModal(id){
+  document.getElementById('v-edit-id').value=id||'';
+  document.getElementById('v-attendee-results').style.display='none';
+  document.getElementById('v-cia-emails').value='';
+  if(id){
+    const v=(getAD(currentAirline).visits||[]).find(x=>x.id===id);
+    if(v){
+      document.getElementById('v-date').value=v.date||'';
+      document.getElementById('v-start').value=v.start||'09:00';
+      document.getElementById('v-end').value=v.end||'10:00';
+      document.getElementById('v-local').value=v.local||'';
+      document.getElementById('v-onfly').value=v.onfly||'';
+      document.getElementById('v-cia').value=v.cia||'';
+      document.getElementById('v-cia-emails').value=v.ciaEmails||'';
+      document.getElementById('v-pauta').value=v.pauta||'';
+      document.getElementById('v-resultados').value=v.resultados||'';
+      document.getElementById('v-proximos').value=v.proximos||'';
+      document.getElementById('v-followup').value=v.followup||'';
+      document.getElementById('v-status').value=v.status||'realizada';
+    }
+  } else {
+    ['v-date','v-local','v-onfly','v-cia','v-pauta','v-resultados','v-proximos','v-followup'].forEach(f=>document.getElementById(f).value='');
+    document.getElementById('v-date').value=new Date().toISOString().split('T')[0];
+    document.getElementById('v-start').value='09:00';
+    document.getElementById('v-end').value='10:00';
+    document.getElementById('v-status').value='realizada';
+  }
+  document.getElementById('visit-modal').classList.add('open');
+}
+function closeVisitModal(){ document.getElementById('visit-modal').classList.remove('open'); }
+
+async function lookupAttendees(){
+  if(!window.cowork){ alert('⚠️ Busca de e-mails disponível apenas no ambiente cowork.'); return; }
+  const onlyNames=document.getElementById('v-onfly').value.split(',').map(s=>s.trim()).filter(Boolean);
+  const ciaNames=document.getElementById('v-cia').value.split(',').map(s=>s.trim()).filter(Boolean);
+  const allNames=[...onlyNames,...ciaNames];
+  if(!allNames.length){ alert('Digite ao menos um participante nos campos Onfly ou Cia.'); return; }
+
+  const btn=document.getElementById('v-lookup-btn');
+  const resultsDiv=document.getElementById('v-attendee-results');
+  btn.textContent='⏳ Buscando...'; btn.disabled=true;
+  resultsDiv.style.display='none';
+
+  const myEmail='rodrigo.possatto@onfly.com.br';
+
+  function matches(email, onlyOnfly){
+    if(!email||!email.includes('@')) return false;
+    const isOnfly=email.endsWith('@onfly.com.br');
+    if(onlyOnfly && !isOnfly) return false;
+    if(!onlyOnfly && isOnfly) return false;
+    return true;
+  }
+
+  function bestOf(freq){
+    if(!freq.size) return null;
+    return [...freq.entries()].sort((a,b)=>b[1]-a[1])[0][0];
+  }
+
+  async function searchEmail(name, onlyOnfly){
+    async function runQuery(q, fieldsToCheck){
+      const r=await window.cowork.callMcpTool('mcp__1eb61ba1-61f6-4a5a-ab01-145ec60b645e__search_threads',{query:q,pageSize:8});
+      const threads=(r.structuredContent||JSON.parse((r.content||[{text:'{}'}])[0].text)).threads||[];
+      const freq=new Map();
+      for(const t of threads)
+        for(const m of (t.messages||[])){
+          const candidates=fieldsToCheck.flatMap(f=>Array.isArray(m[f])?m[f]:[m[f]||'']).map(s=>String(s).toLowerCase().trim());
+          for(const s of candidates){
+            if(matches(s,onlyOnfly)||(onlyOnfly&&s===myEmail))
+              freq.set(s,(freq.get(s)||0)+1);
+          }
+        }
+      return freq;
+    }
+    try{
+      const f1=await runQuery(`from:"${name}"`,['sender']);
+      if(f1.size) return {email:bestOf(f1),label:bestOf(f1)};
+      const f2=await runQuery(`to:"${name}"`,['toRecipients','ccRecipients']);
+      if(f2.size) return {email:bestOf(f2),label:bestOf(f2)};
+      const f3=await runQuery(`"${name}"`,['sender','toRecipients','ccRecipients']);
+      if(f3.size) return {email:bestOf(f3),label:bestOf(f3)};
+    } catch(e){ console.warn('[lookup] erro "'+name+'": '+e.message); }
+    return null;
+  }
+
+  const found={};
+  await Promise.all([
+    ...onlyNames.map(async n=>{ found[n]=await searchEmail(n,true); }),
+    ...ciaNames.map(async n=>{ found[n]=await searchEmail(n,false); })
+  ]);
+
+  btn.textContent='🔍 Buscar emails dos participantes'; btn.disabled=false;
+
+  let html='<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px;font-size:12px">';
+
+  function buildGroup(names, label){
+    if(!names.length) return '';
+    let s=`<div style="font-weight:600;color:#374151;margin-bottom:4px;margin-top:6px">${label}</div>`;
+    for(const name of names){
+      const res=found[name];
+      const key='email-'+name.replace(/[\s,]/g,'_');
+      s+=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <span style="min-width:110px">${name}:</span>`;
+      if(res){
+        s+=`<input type="text" id="${key}" value="${res.email}" style="flex:1;padding:3px 6px;border:1px solid #d1d5db;border-radius:4px;font-size:12px" />`;
+      } else {
+        s+=`<input type="text" id="${key}" placeholder="não encontrado — cole o email" style="flex:1;padding:3px 6px;border:1px solid #fbbf24;border-radius:4px;font-size:12px;background:#fffbeb" />`;
+      }
+      s+='</div>';
+    }
+    return s;
+  }
+
+  html+=buildGroup(onlyNames,'👔 Onfly (@onfly.com.br)');
+  html+=buildGroup(ciaNames,'✈️ Cia Aérea');
+  const allNamesJSON=JSON.stringify(allNames);
+  html+=`<button type="button" class="btn btn-primary btn-sm" style="margin-top:6px" onclick="confirmAttendees(${allNamesJSON})">✅ Confirmar emails</button>`;
+  html+='</div>';
+  resultsDiv.innerHTML=html;
+  resultsDiv.style.display='block';
+}
+
+function confirmAttendees(names){
+  const emails=[];
+  for(const name of names){
+    const el=document.getElementById('email-'+name.replace(/\s/g,'_'));
+    if(el&&el.value.trim()) emails.push(el.value.trim());
+  }
+  document.getElementById('v-cia-emails').value=emails.join(',');
+  document.getElementById('v-attendee-results').innerHTML=
+    `<div style="font-size:12px;color:#10b981">✅ ${emails.length} email(s) confirmado(s): ${emails.join(', ')}</div>`;
+}
+
+function collectConfirmedEmails(){
+  const hidden=document.getElementById('v-cia-emails').value.trim();
+  if(hidden) return hidden;
+  const resultsDiv=document.getElementById('v-attendee-results');
+  if(!resultsDiv||resultsDiv.style.display==='none') return '';
+  const inputs=resultsDiv.querySelectorAll('input[type="text"]');
+  const emails=[...inputs].map(i=>i.value.trim()).filter(e=>e.includes('@'));
+  return emails.join(',');
+}
+
+function saveVisit(){
+  if(!currentAirline) return;
+  const dt=document.getElementById('v-date').value; if(!dt){alert('Data obrigatória');return;}
+  const startT=document.getElementById('v-start').value||'09:00';
+  const endT=document.getElementById('v-end').value||'10:00';
+  const d=getAD(currentAirline), eid=document.getElementById('v-edit-id').value;
+  const v={
+    id:eid||Date.now().toString(),
+    date:dt, start:startT, end:endT,
+    local:document.getElementById('v-local').value,
+    onfly:document.getElementById('v-onfly').value,
+    cia:document.getElementById('v-cia').value,
+    ciaEmails:collectConfirmedEmails(),
+    pauta:document.getElementById('v-pauta').value,
+    resultados:document.getElementById('v-resultados').value,
+    proximos:document.getElementById('v-proximos').value,
+    followup:document.getElementById('v-followup').value,
+    status:document.getElementById('v-status').value
+  };
+  if(eid){ const i=(d.visits||[]).findIndex(x=>x.id===eid); if(i>=0) d.visits[i]=v; else d.visits.push(v); }
+  else { if(!d.visits) d.visits=[]; d.visits.push(v); }
+  saveAD(currentAirline,d); closeVisitModal(); renderVisitas();
+
+  // Google Calendar
+  if(document.getElementById('v-calendar')?.checked){
+    const withMeet=document.getElementById('v-meet')?.checked||false;
+    const desc=[(v.pauta?`📋 Pauta: ${v.pauta}`:''),(v.proximos?`➡️ Próximos passos: ${v.proximos}`:'')].filter(Boolean).join('\n\n');
+    const allEmails=[
+      ...(v.ciaEmails?v.ciaEmails.split(',').map(e=>e.trim()).filter(Boolean):[])
+    ];
+    const attendees=allEmails.map(email=>({email}));
+    const payload={
+      summary:`Visita ${currentAirline.trim()} — Sourcing Onfly`,
+      startTime:`${v.date}T${startT}:00`,
+      endTime:`${v.date}T${endT}:00`,
+      location:v.local||'',
+      description:desc,
+      timeZone:'America/Sao_Paulo',
+      addGoogleMeetUrl:withMeet,
+      overrideReminders:[{method:'email',minutes:1440},{method:'popup',minutes:30}]
+    };
+    if(attendees.length) payload.attendees=attendees;
+    if(!window.cowork){ alert('⚠️ window.cowork não disponível — reabra o painel.'); return; }
+    window.cowork.callMcpTool('mcp__60f6a2c7-cfe7-456a-8ba4-42e31f6e617f__create_event', payload)
+      .then(r=>{
+        if(!r.isError){
+          const res=r.structuredContent||{};
+          alert(`✅ Evento criado!\n${res.summary||''}\n${res.htmlLink||''}`);
+        } else {
+          alert('⚠️ Erro ao criar evento:\n'+(r.content?.[0]?.text||JSON.stringify(r)));
+        }
+      })
+      .catch(e=>{ alert('⚠️ Erro: '+e.message); });
+  }
+}
+function delVisit(id){ if(!confirm('Excluir visita?')) return; const d=getAD(currentAirline); d.visits=(d.visits||[]).filter(v=>v.id!==id); saveAD(currentAirline,d); renderVisitas(); }
+
+// ── MERCADO ────────────────────────────────────────────
+const catL={acordo:'🤝 Acordo',expansao:'✈️ Expansão',financeiro:'💰 Financeiro',concorrencia:'⚔️ Concorrência',regulatorio:'⚖️ Regulatório',outro:'📌 Outro'};
+function renderMercado(){
+  if(!currentAirline) return;
+  const d=getAD(currentAirline);
+  const ns=(d.market||[]).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const q=encodeURIComponent(currentAirline.trim()+' companhia aérea');
+  const newsUrl='https://news.google.com/search?q='+q+'&hl=pt-BR&gl=BR&ceid=BR:pt-419';
+  let html=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px"><h3 style="font-size:14px;font-weight:600">${ns.length} nota${ns.length!==1?'s':''}</h3><div style="display:flex;gap:8px"><a href="${newsUrl}" target="_blank" rel="noopener" class="btn btn-outline" style="text-decoration:none">🔍 Buscar Notícias</a><button class="btn btn-primary" onclick="openMarketModal()">+ Adicionar</button></div></div>`;
+  if(!ns.length){ html+='<div class="empty-state"><div class="icon">🌐</div><p>Nenhuma informação registrada.<br>Adicione notícias, benchmarks, novidades.</p></div>'; }
+  else ns.forEach(n=>{ html+=`<div class="note-item"><div style="display:flex;justify-content:space-between;align-items:flex-start"><div><div class="note-date">${n.date?fmtD(n.date):''} ${n.cat?`· <span class="badge badge-blue">${catL[n.cat]||n.cat}</span>`:''}</div><div class="note-title">${n.title}</div></div><button class="icon-btn" onclick="delNote('${n.id}')">🗑</button></div><div class="note-content">${n.content||''}</div>${n.source?`<div style="margin-top:8px;font-size:12px;color:var(--gray)">🔗 <a href="${n.source}" target="_blank" style="color:var(--blue)">${n.source}</a></div>`:''}</div>`; });
+  document.getElementById('mercado-content').innerHTML=html;
+}
+function autoFillFromUrl(){
+  const urlEl=document.getElementById('m-source');
+  const titleEl=document.getElementById('m-title');
+  const statusEl=document.getElementById('autofill-status');
+  const url=(urlEl?urlEl.value:'').trim();
+
+  if(!url){ return; }
+  if(!url.startsWith('http')){ showStatus('⚠️ URL deve começar com http://','#f59e0b'); return; }
+
+  try{
+    const u=new URL(url);
+    const rawParts=u.pathname.split('/').filter(p=>p.length>0);
+    let bestSlug='', bestScore=0;
+    for(const part of rawParts){
+      const cleaned=part.replace(/\.\w{2,5}$/,'');
+      const letters=(cleaned.match(/[a-zA-ZÀ-ÿ]/g)||[]).length;
+      const hyphens=(cleaned.match(/-/g)||[]).length;
+      if(letters<3) continue;
+      const score=letters+(hyphens*4);
+      if(score>bestScore){ bestScore=score; bestSlug=cleaned; }
+    }
+
+    let title='';
+    if(bestSlug && bestScore>=5){
+      title=bestSlug
+        .replace(/[-_]+/g,' ')
+        .replace(/\d{6,}/g,'')
+        .replace(/\s+/g,' ')
+        .trim()
+        .replace(/\b[a-zà-ÿ]/g,c=>c.toUpperCase());
+    }
+
+    if(title && title.length>2){
+      titleEl.value=title;
+      showStatus('✅ Título sugerido — edite se quiser','#10b981');
+    } else {
+      showStatus('⚠️ Não consegui extrair o título — preencha manualmente','#f59e0b');
+    }
+
+    const lc=url.toLowerCase();
+    let cat='outro';
+    if(/acordo|agreement|incentiv|rebat|parceria|partner|deal/.test(lc)) cat='acordo';
+    else if(/rota|route|expan|voo|flight|destino/.test(lc)) cat='expansao';
+    else if(/result|lucro|prejui|receita|financ|revenue|profit|faturamento|trimest/.test(lc)) cat='financeiro';
+    else if(/concorr|compet|rival|mercado/.test(lc)) cat='concorrencia';
+    else if(/anac|regul|licen|autoriza|governo|ministe/.test(lc)) cat='regulatorio';
+    document.getElementById('m-cat').value=cat;
+
+    const btn=document.getElementById('autofill-btn');
+    btn.textContent=title?'✅ Preenchido!':'⚠️ Sem título';
+    setTimeout(()=>{btn.textContent='✨ Auto-preencher';},3000);
+
+  }catch(e){
+    showStatus('⚠️ URL inválida: '+e.message,'#ef4444');
+  }
+
+  function showStatus(msg,color){
+    if(!statusEl) return;
+    statusEl.textContent=msg;
+    statusEl.style.color=color;
+    statusEl.style.display='block';
+    setTimeout(()=>{ if(statusEl) statusEl.style.display='none'; },5000);
+  }
+}
+function openMarketModal(){ document.getElementById('m-title').value=''; document.getElementById('m-content').value=''; document.getElementById('m-source').value=''; document.getElementById('m-date').value=new Date().toISOString().split('T')[0]; const ab=document.getElementById('autofill-btn'); ab.textContent='✨ Auto-preencher'; ab.disabled=false; document.getElementById('autofill-loading').style.display='none'; document.getElementById('market-modal').classList.add('open'); }
+function closeMarketModal(){ document.getElementById('market-modal').classList.remove('open'); }
+function saveMarketNote(){
+  if(!currentAirline) return;
+  const t=document.getElementById('m-title').value.trim(), cont=document.getElementById('m-content').value.trim();
+  if(!t||!cont){alert('Título e conteúdo obrigatórios');return;}
+  const d=getAD(currentAirline); if(!d.market) d.market=[];
+  d.market.push({id:Date.now().toString(),title:t,cat:document.getElementById('m-cat').value,date:document.getElementById('m-date').value,content:cont,source:document.getElementById('m-source').value});
+  saveAD(currentAirline,d); closeMarketModal(); renderMercado();
+}
+function delNote(id){ if(!confirm('Excluir nota?')) return; const d=getAD(currentAirline); d.market=(d.market||[]).filter(n=>n.id!==id); saveAD(currentAirline,d); renderMercado(); }
+
+// ── Gmail ──────────────────────────────────────────────
+async function loadGmail(){
+  if(!currentAirline) return;
+  const el=document.getElementById('gmail-content');
+  if(!el) return;
+  const gmailData = (window.__CRM__ || {}).gmail;
+
+  // null → OAuth não configurado no servidor Python
+  if(gmailData === null){
+    el.innerHTML=`<div style="padding:12px;background:#FFF8E1;border-left:3px solid #FFC107;border-radius:4px;font-size:12px;color:#666">
+      <strong>⚙️ Gmail OAuth não configurado</strong><br>
+      Execute <code>setup_gmail_oauth.py</code> e adicione as 3 chaves ao <code>.streamlit/secrets.toml</code>.
+    </div>`;
+    return;
+  }
+
+  // Array pré-carregado pelo Python via OAuth
+  if(Array.isArray(gmailData)){
+    if(!gmailData.length){
+      el.innerHTML='<p style="font-size:13px;color:var(--gray)">Nenhum e-mail encontrado para esta cia.</p>';
+      return;
+    }
+    let html='';
+    gmailData.forEach(t=>{
+      html+=`<div style="border-bottom:1px solid var(--border);padding:10px 0">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <strong style="font-size:13px">${t.subject||'(sem assunto)'}</strong>
+          <span style="font-size:11px;color:var(--gray);white-space:nowrap;margin-left:8px">${t.date||''}</span>
+        </div>
+        <div style="font-size:12px;color:var(--blue);margin-top:2px">${t.from||''}</div>
+        <div style="font-size:12px;color:var(--gray);margin-top:3px;line-height:1.4">${t.snippet||''}</div>
+      </div>`;
+    });
+    el.innerHTML=html;
+    return;
+  }
+
+  // undefined / fallback → tenta via cowork
+  if(!window.cowork){ el.innerHTML='<p style="font-size:13px;color:var(--gray)">📌 Integração com Gmail disponível apenas no ambiente cowork.</p>'; return; }
+  el.innerHTML='<div class="loading"><div class="spinner"></div> Buscando e-mails...</div>';
+  const name=currentAirline.trim().split(' ')[0].toLowerCase();
+  try{
+    const r=await window.cowork.callMcpTool('mcp__1eb61ba1-61f6-4a5a-ab01-145ec60b645e__search_threads',{query:name, pageSize:8});
+    const d=r.structuredContent??JSON.parse(r.content[0].text);
+    const threads=(d.threads||d||[]);
+    if(!threads.length){ el.innerHTML='<p style="font-size:13px;color:var(--gray)">Nenhum e-mail encontrado para esta cia.</p>'; return; }
+    let html='';
+    threads.forEach(t=>{
+      const msgs=t.messages||[];
+      const last=msgs[msgs.length-1]||msgs[0]||{};
+      const subj=last.subject||last.snippet?.slice(0,60)||'(sem assunto)';
+      const from=last.from||last.sender||'';
+      const date=last.date||last.internalDate||'';
+      const snippet=last.snippet||'';
+      html+=`<div style="border-bottom:1px solid var(--border);padding:10px 0">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <strong style="font-size:13px">${subj}</strong>
+          <span style="font-size:11px;color:var(--gray);white-space:nowrap;margin-left:8px">${date}</span>
+        </div>
+        <div style="font-size:12px;color:var(--blue);margin-top:2px">${from}</div>
+        <div style="font-size:12px;color:var(--gray);margin-top:3px;line-height:1.4">${snippet}</div>
+      </div>`;
+    });
+    el.innerHTML=html;
+  }catch(e){ el.innerHTML=`<p style="font-size:13px;color:#ef4444">Erro: ${e.message}</p>`; }
+}
+
+// ── Init (dados injetados pelo Streamlit) ──────────────
+initPeriod();
+const __CRM = window.__CRM__ || {};
+currentAirline = __CRM.selectedAirline || null;
+if(__CRM.fromDate) document.getElementById('from-month').value = __CRM.fromDate.slice(0,7);
+if(__CRM.toDate)   document.getElementById('to-month').value   = __CRM.toDate.slice(0,7);
+const __asel = document.getElementById('airline-select');
+__asel.innerHTML = '';
+(__CRM.airlines||[]).forEach(r=>{
+  const o = document.createElement('option');
+  o.value = r.a; o.textContent = `${r.a} (${r.c})`;
+  o.selected = r.a === currentAirline;
+  __asel.appendChild(o);
+});
+__asel.onchange = e => { currentAirline = e.target.value || null; };
+if(currentAirline && __CRM.transacional) loadTransacional();
+</script>
+</body>
+</html>

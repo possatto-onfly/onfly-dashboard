@@ -1,0 +1,19 @@
+# Credenciais — nunca versionar
+.streamlit/secrets.toml
+client_secret.json
+.env
+
+# Binários e instaladores
+*.tar.gz
+*.zip
+*.dmg
+
+# macOS
+.DS_Store
+
+# Python
+*.pyc
+__pycache__/
+
+# Runtime
+.streamlit/analises_history.json

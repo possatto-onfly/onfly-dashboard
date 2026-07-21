@@ -720,6 +720,15 @@ def plotly_layout(fig, height=340):
 # ─── BigQuery ─────────────────────────────────────────────────────────────────
 @st.cache_resource
 def bq_client():
+    if "GCP_SERVICE_ACCOUNT" in st.secrets:
+        import json
+        from google.oauth2 import service_account
+        info = json.loads(st.secrets["GCP_SERVICE_ACCOUNT"])
+        creds = service_account.Credentials.from_service_account_info(
+            info,
+            scopes=["https://www.googleapis.com/auth/bigquery"]
+        )
+        return bigquery.Client(project=PROJECT_ID, credentials=creds)
     return bigquery.Client(project=PROJECT_ID)
 
 def _where(inicio, fim, cia=None):

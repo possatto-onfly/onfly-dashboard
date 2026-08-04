@@ -3087,6 +3087,7 @@ def q_buscas_destinos(inicio: str, fim: str, internacional: bool, limit: int = 2
         WHERE created_at >= '{inicio}' AND created_at <= '{fim}'
           AND is_international = {flag}
           AND destiny IS NOT NULL
+          {'AND LOWER(IFNULL(destiny_city_country,"")) NOT IN ("brazil","brasil","br") AND destiny NOT IN ("Guarulhos International Airport","Tancredo Neves International Airport","São Paulo","Sao Paulo","Rio de Janeiro","Belo Horizonte","Brasilia","Curitiba","Porto Alegre","Salvador","Fortaleza","Recife","Vitoria","Goiania","Manaus","Natal","Maceio","Belem","Florianopolis","Campinas","Navegantes")' if internacional else ''}
         GROUP BY 1, 2
         ORDER BY buscas DESC
         LIMIT {limit}

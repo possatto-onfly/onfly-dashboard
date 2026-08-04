@@ -1703,7 +1703,7 @@ with st.sidebar:
     # ── Categoria ──
     GRUPOS = {
         "📊  Resultados": ["📊  GMV", "🎫  GMV de Incentivo", "💰  Take Rate", "💎  Take Rate c/ Incentivo", "📈  Tendência"],
-        "✈️  Visitas":    ["✈️  Cia Aérea", "🌍  Destino", "🗺️  Distribuição", "🌐  Potencial de Voo", "🏭  Consolidadores", "📋  Cia Aérea Legado", "⚖️  Balanceamento"],
+        "✈️  Visitas":    ["✈️  Cia Aérea", "🌍  Destino", "🗺️  Distribuição", "🌐  Potencial de Voo", "🏭  Consolidadores", "📋  Cia Aérea Legado", "⚖️  Balanceamento", "🔍  Buscas & Conversão"],
         "👥  Clientes":   ["🏢  Clientes", "💲  Pricing", "🛫  Quem voa o que?"],
         "💼  Incentivos": ["🔵  Azul", "🔴  LATAM"],
         "🔍  Análises":   [],
@@ -3040,6 +3040,100 @@ def q_clientes_por_cia(variantes: tuple, inicio: str, fim: str) -> pd.DataFrame:
             "Reservas":     int(r.reservas),
             "GMV":          float(r.gmv or 0),
             "Ticket Médio": float(r.ticket_medio or 0),
+        } for r in rows])
+    except Exception:
+        return pd.DataFrame()
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def q_buscas_conversao_mensal(inicio: str, fim: str) -> pd.DataFrame:
+    q = f"""
+        WITH buscas AS (
+          SELECT FORMAT_DATE('%Y-%m', DATE(created_at)) AS mes, COUNT(*) AS total_buscas
+          FROM `dw-onfly-prd.travel_core.silver_flight_quotes`
+          WHERE created_at >= '{inicio}' AND created_at <= '{fim}'
+          GROUP BY 1
+        ),
+        emissoes AS (
+          SELECT FORMAT_DATE('%Y-%m', partition_date) AS mes, COUNT(*) AS total_emissoes
+          FROM `{TABLE_FLIGHT_ORDERS}`
+          WHERE partition_date BETWEEN '{inicio}' AND '{fim}' AND status = 2
+          GROUP BY 1
+        )
+        SELECT b.mes, b.total_buscas, IFNULL(e.total_emissoes,0) AS total_emissoes,
+          ROUND(IFNULL(e.total_emissoes,0)*100.0/NULLIF(b.total_buscas,0),2) AS conversao_pct
+        FROM buscas b LEFT JOIN emissoes e ON b.mes = e.mes
+        ORDER BY 1
+    """
+    try:
+        rows = list(bq_client().query(q).result())
+        return pd.DataFrame([{
+            "Mês": r.mes, "Buscas": int(r.total_buscas),
+            "Emissões": int(r.total_emissoes), "Conversão (%)": float(r.conversao_pct or 0),
+        } for r in rows])
+    except Exception:
+        return pd.DataFrame()
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def q_buscas_destinos(inicio: str, fim: str, internacional: bool, limit: int = 20) -> pd.DataFrame:
+    flag = 1 if internacional else 0
+    q = f"""
+        SELECT IFNULL(destiny_city, destiny) AS destino,
+               IFNULL(destiny_city_country, '') AS pais,
+               COUNT(*) AS buscas,
+               ROUND(COUNT(*)*100.0/SUM(COUNT(*)) OVER(),1) AS pct
+        FROM `dw-onfly-prd.travel_core.silver_flight_quotes`
+        WHERE created_at >= '{inicio}' AND created_at <= '{fim}'
+          AND is_international = {flag}
+          AND destiny IS NOT NULL
+        GROUP BY 1, 2
+        ORDER BY buscas DESC
+        LIMIT {limit}
+    """
+    try:
+        rows = list(bq_client().query(q).result())
+        return pd.DataFrame([{
+            "Destino": r.destino or "", "País": r.pais or "",
+            "Buscas": int(r.buscas), "% do Total": float(r.pct or 0),
+        } for r in rows])
+    except Exception:
+        return pd.DataFrame()
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def q_buscas_conversao_empresas(inicio: str, fim: str, min_buscas: int = 300) -> pd.DataFrame:
+    q = f"""
+        WITH buscas AS (
+          SELECT company_id, COUNT(*) AS total_buscas
+          FROM `dw-onfly-prd.travel_core.silver_flight_quotes`
+          WHERE created_at >= '{inicio}' AND created_at <= '{fim}'
+          GROUP BY 1 HAVING COUNT(*) >= {min_buscas}
+        ),
+        emissoes AS (
+          SELECT company_id, MIN(company) AS empresa,
+                 COUNT(*) AS total_emissoes,
+                 ROUND(SUM(total_amount_currency_brl),2) AS gmv
+          FROM `{TABLE_FLIGHT_ORDERS}`
+          WHERE partition_date BETWEEN '{inicio}' AND '{fim}' AND status = 2
+          GROUP BY 1
+        )
+        SELECT b.company_id,
+               IFNULL(e.empresa, CAST(b.company_id AS STRING)) AS empresa,
+               b.total_buscas,
+               IFNULL(e.total_emissoes, 0) AS total_emissoes,
+               ROUND(IFNULL(e.total_emissoes,0)*100.0/NULLIF(b.total_buscas,0),1) AS conversao_pct,
+               IFNULL(e.gmv, 0) AS gmv
+        FROM buscas b LEFT JOIN emissoes e ON b.company_id = e.company_id
+        ORDER BY conversao_pct ASC
+        LIMIT 30
+    """
+    try:
+        rows = list(bq_client().query(q).result())
+        return pd.DataFrame([{
+            "ID": int(r.company_id), "Empresa": r.empresa or "",
+            "Buscas": int(r.total_buscas), "Emissões": int(r.total_emissoes),
+            "Conversão (%)": float(r.conversao_pct or 0), "GMV": float(r.gmv or 0),
         } for r in rows])
     except Exception:
         return pd.DataFrame()
@@ -8020,3 +8114,87 @@ elif secao == "🤝  CRM Aéreo":
         )
 
         _components.html(_html, height=1350, scrolling=True)
+
+elif secao == "🔍  Buscas & Conversão":
+
+    st.markdown('<div class="sec-header-wrap"><p class="sec-header">🔍 Buscas & Conversão</p></div>',
+                unsafe_allow_html=True)
+
+    with st.spinner("Carregando dados de buscas..."):
+        df_conv_mes  = q_buscas_conversao_mensal(i_str, f_str)
+        df_dest_int  = q_buscas_destinos(i_str, f_str, internacional=True, limit=20)
+        df_dest_dom  = q_buscas_destinos(i_str, f_str, internacional=False, limit=20)
+        df_emp_conv  = q_buscas_conversao_empresas(i_str, f_str, min_buscas=300)
+
+    # ── KPIs ──
+    total_buscas   = int(df_conv_mes["Buscas"].sum())   if not df_conv_mes.empty else 0
+    total_emissoes = int(df_conv_mes["Emissões"].sum()) if not df_conv_mes.empty else 0
+    conv_geral     = round(total_emissoes * 100 / total_buscas, 2) if total_buscas else 0
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Total de Buscas", f"{total_buscas:,}".replace(",", "."))
+    c2.metric("Total de Emissões", f"{total_emissoes:,}".replace(",", "."))
+    c3.metric("Conversão Geral", f"{conv_geral}%")
+
+    st.markdown("---")
+
+    # ── Gráfico conversão mensal ──
+    if not df_conv_mes.empty:
+        st.markdown("#### Buscas e Conversão por Mês")
+        import plotly.graph_objects as go
+        fig_conv = go.Figure()
+        fig_conv.add_bar(x=df_conv_mes["Mês"], y=df_conv_mes["Buscas"],
+                         name="Buscas", marker_color=ONFLY_BLUE, opacity=0.7)
+        fig_conv.add_bar(x=df_conv_mes["Mês"], y=df_conv_mes["Emissões"],
+                         name="Emissões", marker_color=ONFLY_GREEN, opacity=0.9)
+        fig_conv.add_scatter(x=df_conv_mes["Mês"], y=df_conv_mes["Conversão (%)"],
+                             name="Conversão (%)", mode="lines+markers",
+                             line=dict(color=ONFLY_ORANGE, width=2),
+                             yaxis="y2")
+        fig_conv.update_layout(
+            barmode="group", yaxis2=dict(overlaying="y", side="right", title="Conversão (%)"),
+            height=380, margin=dict(t=20, b=20),
+            legend=dict(orientation="h", y=-0.15),
+        )
+        st.plotly_chart(fig_conv, use_container_width=True)
+
+    st.markdown("---")
+
+    # ── Destinos ──
+    col_int, col_dom = st.columns(2)
+
+    with col_int:
+        st.markdown("#### 🌍 Top 20 Destinos Internacionais")
+        if not df_dest_int.empty:
+            st.dataframe(
+                df_dest_int[["Destino", "País", "Buscas", "% do Total"]].style.format(
+                    {"Buscas": "{:,.0f}".replace(",", "."), "% do Total": "{:.1f}%"}
+                ),
+                use_container_width=True, hide_index=True, height=600,
+            )
+
+    with col_dom:
+        st.markdown("#### 🇧🇷 Top 20 Destinos Domésticos")
+        if not df_dest_dom.empty:
+            st.dataframe(
+                df_dest_dom[["Destino", "Buscas", "% do Total"]].style.format(
+                    {"Buscas": "{:,.0f}".replace(",", "."), "% do Total": "{:.1f}%"}
+                ),
+                use_container_width=True, hide_index=True, height=600,
+            )
+
+    st.markdown("---")
+
+    # ── Empresas com menor conversão ──
+    st.markdown("#### ⚠️ Empresas com Maior Potencial de Ativação (menor conversão)")
+    st.caption("Empresas com mínimo 300 buscas no período, ordenadas da menor para maior conversão.")
+    if not df_emp_conv.empty:
+        df_show = df_emp_conv[df_emp_conv["Empresa"].str.strip().str.upper() != df_emp_conv["ID"].astype(str)].copy()
+        df_show["GMV"] = df_show["GMV"].apply(lambda x: f"R$ {x:,.2f}".replace(",","X").replace(".",",").replace("X","."))
+        df_show["Buscas"] = df_show["Buscas"].apply(lambda x: f"{x:,}".replace(",","."))
+        df_show["Emissões"] = df_show["Emissões"].apply(lambda x: f"{x:,}".replace(",","."))
+        df_show["Conversão (%)"] = df_show["Conversão (%)"].apply(lambda x: f"{x:.1f}%")
+        st.dataframe(
+            df_show[["Empresa", "Buscas", "Emissões", "Conversão (%)", "GMV"]],
+            use_container_width=True, hide_index=True, height=700,
+        )

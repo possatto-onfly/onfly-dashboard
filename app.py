@@ -8168,7 +8168,7 @@ elif secao == "🔍  Buscas & Conversão":
         if not df_dest_int.empty:
             st.dataframe(
                 df_dest_int[["Destino", "País", "Buscas", "% do Total"]].style.format(
-                    {"Buscas": "{:,.0f}".replace(",", "."), "% do Total": "{:.1f}%"}
+                    {"Buscas": lambda x: f"{int(x):,}".replace(",", "."), "% do Total": lambda x: f"{x:.1f}%"}
                 ),
                 use_container_width=True, hide_index=True, height=600,
             )
@@ -8178,7 +8178,7 @@ elif secao == "🔍  Buscas & Conversão":
         if not df_dest_dom.empty:
             st.dataframe(
                 df_dest_dom[["Destino", "Buscas", "% do Total"]].style.format(
-                    {"Buscas": "{:,.0f}".replace(",", "."), "% do Total": "{:.1f}%"}
+                    {"Buscas": lambda x: f"{int(x):,}".replace(",", "."), "% do Total": lambda x: f"{x:.1f}%"}
                 ),
                 use_container_width=True, hide_index=True, height=600,
             )

@@ -4720,13 +4720,14 @@ elif secao == "📊  GMV":
                     marker_color=hex_to_rgba("#F59E0B", 0.55),
                     hovertemplate="<b>%{x}</b><br>Projeção restante: R$ %{y:,.0f}<extra></extra>",
                 ))
-            # Totais no topo
+            # Totais no topo (sem R$, sem decimais, em milhões)
+            def _fmt_m(v): return f"{v/1_000_000:.0f}M"
             _labels_topo = []
             for _a, _t in zip(_anos_str, _totais_ano):
                 if _a == _ano_atual_str and _proj_ano_mm > 0:
-                    _labels_topo.append(f"<b>{brl(_proj_ano_mm)}*</b>")
+                    _labels_topo.append(f"<b>{_fmt_m(_proj_ano_mm)}*</b>")
                 else:
-                    _labels_topo.append(f"<b>{brl(_t)}</b>")
+                    _labels_topo.append(f"<b>{_fmt_m(_t)}</b>")
             _fig_mm.add_trace(go.Scatter(
                 x=_anos_str,
                 y=[_t + _proj_resto_mm if _a == _ano_atual_str else _t for _a, _t in zip(_anos_str, _totais_ano)],

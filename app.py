@@ -4679,7 +4679,13 @@ elif secao == "📊  GMV":
 
         # Gráfico de barras empilhadas diário por modal (D-1)
         _df_pivot = _df_mm_d1.pivot_table(index="dia_num", columns="modal", values="gmv", aggfunc="sum", fill_value=0).reset_index()
+        _df_pivot.columns = [str(c) for c in _df_pivot.columns]  # normaliza nomes
         _modais_presentes = [m for m in ["flight", "hotel", "auto", "bus", "generic"] if m in _df_pivot.columns]
+
+        # Total real por dia (soma direta do dataframe original — todos os modais)
+        _totais_por_dia = _df_mm_d1.groupby("dia_num")["gmv"].sum()
+        _dias_ordenados = _df_pivot["dia_num"].tolist()
+        _totais_dia = [_totais_por_dia.get(d, 0) for d in _dias_ordenados]
 
         _fig_mm = go.Figure()
         for _m in _modais_presentes:
@@ -4690,9 +4696,8 @@ elif secao == "📊  GMV":
                 marker_color=_MODAL_CORES.get(_m, "#94A3B8"),
             ))
         # Total no topo de cada coluna
-        _totais_dia = _df_pivot[_modais_presentes].sum(axis=1)
         _fig_mm.add_trace(go.Scatter(
-            x=_df_pivot["dia_num"],
+            x=_dias_ordenados,
             y=_totais_dia,
             mode="text",
             text=[f"<b>R$ {v/1_000_000:.2f}M</b>" for v in _totais_dia],

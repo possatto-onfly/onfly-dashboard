@@ -4037,6 +4037,30 @@ def q_tendencia_diario(mes: int, ano: int) -> pd.DataFrame:
     return df
 
 @st.cache_data(ttl=300, show_spinner=False)
+def q_todos_modais_diario(mes: int, ano: int) -> pd.DataFrame:
+    """GMV diário por modal (flight, hotel, auto, bus) de silver_all_emissions."""
+    from calendar import monthrange as _mr
+    i = date(ano, mes, 1).strftime("%Y-%m-%d")
+    f = date(ano, mes, _mr(ano, mes)[1]).strftime("%Y-%m-%d")
+    sql = f"""
+    SELECT
+        DATE(created_at)                         AS dia,
+        type                                     AS modal,
+        ROUND(SUM(total_amount_currency_brl), 2) AS gmv
+    FROM `dw-onfly-prd.travel_core.silver_all_emissions`
+    WHERE status = 2
+      AND created_at >= '{i}'
+      AND created_at < DATE_ADD('{f}', INTERVAL 1 DAY)
+    GROUP BY 1, 2
+    ORDER BY 1, 2
+    """
+    df = bq_client().query(sql).to_dataframe()
+    if not df.empty:
+        df["dia"] = pd.to_datetime(df["dia"])
+        df["dia_num"] = df["dia"].dt.day
+    return df
+
+@st.cache_data(ttl=300, show_spinner=False)
 def q_tendencia_diario_cia(mes: int, ano: int, cia: str) -> pd.DataFrame:
     """Igual a q_tendencia_diario mas filtrado por consolidator_unified."""
     from calendar import monthrange as _mr
@@ -4606,6 +4630,79 @@ elif secao == "📊  GMV":
             render_cabine(df_cab, COR_AMADEUS)
             render_rotas(df_rot)
             render_gmv_anual(df_ano, COR_AMADEUS)
+
+    # ── Projeção GMV Total (todos os modais) ─────────────────────────────────
+    st.markdown("---")
+    st.markdown('<div class="sec-header-wrap"><p class="sec-header">GMV Total — Todos os Modais (Projeção D-1, dias úteis)</p></div>', unsafe_allow_html=True)
+    with st.spinner("Carregando dados multimodal..."):
+        try:
+            from calendar import monthrange as _mr_mm
+            _hoje_mm  = date.today()
+            _df_mm    = q_todos_modais_diario(_hoje_mm.month, _hoje_mm.year)
+        except Exception as _e_mm:
+            _df_mm = pd.DataFrame()
+            st.error(f"Erro ao carregar dados multimodal: {_e_mm}")
+
+    if not _df_mm.empty:
+        _MODAL_LABELS = {"flight": "Aéreo", "hotel": "Hotel", "auto": "Carro", "bus": "Ônibus", "generic": "Outros"}
+        _MODAL_CORES  = {"flight": ONFLY_BLUE, "hotel": "#10B981", "auto": "#F59E0B", "bus": "#8B5CF6", "generic": "#94A3B8"}
+
+        # Exclui dia atual (D-1)
+        _df_mm_d1 = _df_mm[_df_mm["dia_num"] < _hoje_mm.day]
+
+        # GMV total realizado até D-1
+        _gmv_mm_real = float(_df_mm_d1["gmv"].sum())
+
+        # Dias úteis passados (D-1) e total do mês
+        _dias_uteis_mm = sorted(_df_mm_d1["dia_num"].unique())
+        _uteis_passados_mm = sum(
+            1 for d in _dias_uteis_mm
+            if date(_hoje_mm.year, _hoje_mm.month, int(d)).weekday() < 5
+        )
+        _uteis_mes_mm = sum(
+            1 for d in range(1, _mr_mm(_hoje_mm.year, _hoje_mm.month)[1] + 1)
+            if date(_hoje_mm.year, _hoje_mm.month, d).weekday() < 5
+        )
+        _proj_mm = (_gmv_mm_real / _uteis_passados_mm * _uteis_mes_mm) if _uteis_passados_mm > 0 else 0
+
+        # KPIs
+        _col1_mm, _col2_mm, _col3_mm = st.columns(3)
+        with _col1_mm:
+            st.markdown(f'<div class="kpi-card"><p class="kpi-label">GMV Realizado até D-1</p><p class="kpi-value">{brl(_gmv_mm_real)}</p></div>', unsafe_allow_html=True)
+        with _col2_mm:
+            st.markdown(f'<div class="kpi-card"><p class="kpi-label">Projeção do Mês (dias úteis)</p><p class="kpi-value">{brl(_proj_mm)}</p></div>', unsafe_allow_html=True)
+        with _col3_mm:
+            _pct_mm = (_gmv_mm_real / _proj_mm * 100) if _proj_mm > 0 else 0
+            st.markdown(f'<div class="kpi-card"><p class="kpi-label">% do Mês Realizado</p><p class="kpi-value">{_pct_mm:.1f}%</p></div>', unsafe_allow_html=True)
+
+        st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
+
+        # Gráfico de barras empilhadas diário por modal (D-1)
+        _df_pivot = _df_mm_d1.pivot_table(index="dia_num", columns="modal", values="gmv", aggfunc="sum", fill_value=0).reset_index()
+        _modais_presentes = [m for m in ["flight", "hotel", "auto", "bus", "generic"] if m in _df_pivot.columns]
+
+        _fig_mm = go.Figure()
+        for _m in _modais_presentes:
+            _fig_mm.add_trace(go.Bar(
+                x=_df_pivot["dia_num"],
+                y=_df_pivot[_m],
+                name=_MODAL_LABELS.get(_m, _m),
+                marker_color=_MODAL_CORES.get(_m, "#94A3B8"),
+            ))
+        _fig_mm.update_layout(barmode="stack", xaxis_title="Dia", yaxis_title="GMV (R$)", yaxis_tickprefix="R$ ")
+        st.plotly_chart(plotly_layout(_fig_mm, 380), use_container_width=True)
+
+        # Tabela resumo por modal
+        _resumo_mm = (
+            _df_mm_d1.groupby("modal")["gmv"].sum()
+            .reset_index()
+            .rename(columns={"modal": "Modal", "gmv": "GMV Realizado (R$)"})
+        )
+        _resumo_mm["Modal"] = _resumo_mm["Modal"].map(_MODAL_LABELS).fillna(_resumo_mm["Modal"])
+        _resumo_mm["% do Total"] = (_resumo_mm["GMV Realizado (R$)"] / _gmv_mm_real * 100).round(1)
+        _resumo_mm["GMV Realizado (R$)"] = _resumo_mm["GMV Realizado (R$)"].apply(lambda x: brl(x))
+        _resumo_mm = _resumo_mm.sort_values("% do Total", ascending=False)
+        st.dataframe(_resumo_mm, use_container_width=True, hide_index=True)
 
 # ══════════════════════════════════════════════════════════════════════════════
 # SEÇÃO: GMV DE INCENTIVO

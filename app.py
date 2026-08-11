@@ -4060,6 +4060,22 @@ def q_todos_modais_diario(mes: int, ano: int) -> pd.DataFrame:
         df["dia_num"] = df["dia"].dt.day
     return df
 
+@st.cache_data(ttl=3600, show_spinner=False)
+def q_gmv_anual_todos_modais() -> pd.DataFrame:
+    """GMV anual por modal de silver_all_emissions."""
+    sql = """
+    SELECT
+        CAST(EXTRACT(YEAR FROM created_at) AS INT64) AS ano,
+        type                                          AS modal,
+        ROUND(SUM(total_amount_currency_brl), 2)      AS gmv,
+        COUNT(*)                                      AS reservas
+    FROM `dw-onfly-prd.travel_core.silver_all_emissions`
+    WHERE status = 2
+    GROUP BY 1, 2
+    ORDER BY 1, 2
+    """
+    return bq_client().query(sql).to_dataframe()
+
 @st.cache_data(ttl=300, show_spinner=False)
 def q_tendencia_diario_cia(mes: int, ano: int, cia: str) -> pd.DataFrame:
     """Igual a q_tendencia_diario mas filtrado por consolidator_unified."""
@@ -4631,95 +4647,123 @@ elif secao == "📊  GMV":
             render_rotas(df_rot)
             render_gmv_anual(df_ano, COR_AMADEUS)
 
-    # ── Projeção GMV Total (todos os modais) ─────────────────────────────────
+    # ── GMV Total Ano a Ano — Todos os Modais ────────────────────────────────
     st.markdown("---")
-    st.markdown('<div class="sec-header-wrap"><p class="sec-header">GMV Total — Todos os Modais (Projeção D-1, dias úteis)</p></div>', unsafe_allow_html=True)
+    st.markdown('<div class="sec-header-wrap"><p class="sec-header">Evolução do GMV Ano a Ano — Todos os Modais</p></div>', unsafe_allow_html=True)
     with st.spinner("Carregando dados multimodal..."):
         try:
             from calendar import monthrange as _mr_mm
-            _hoje_mm  = date.today()
-            _df_mm    = q_todos_modais_diario(_hoje_mm.month, _hoje_mm.year)
+            _hoje_mm   = date.today()
+            _df_mm_ano = q_gmv_anual_todos_modais()
+            _df_mm_mes = q_todos_modais_diario(_hoje_mm.month, _hoje_mm.year)
         except Exception as _e_mm:
-            _df_mm = pd.DataFrame()
+            _df_mm_ano = pd.DataFrame()
+            _df_mm_mes = pd.DataFrame()
             st.error(f"Erro ao carregar dados multimodal: {_e_mm}")
 
-    if not _df_mm.empty:
+    if not _df_mm_ano.empty:
         _MODAL_LABELS = {"flight": "Aéreo", "hotel": "Hotel", "auto": "Carro", "bus": "Ônibus", "generic": "Outros"}
         _MODAL_CORES  = {"flight": ONFLY_BLUE, "hotel": "#10B981", "auto": "#F59E0B", "bus": "#8B5CF6", "generic": "#94A3B8"}
+        _MODAIS_ORDER = ["flight", "hotel", "auto", "bus", "generic"]
 
-        # Exclui dia atual (D-1)
-        _df_mm_d1 = _df_mm[_df_mm["dia_num"] < _hoje_mm.day]
+        # Projeção do ano atual (D-1, dias úteis)
+        _proj_ano_mm = 0.0
+        if not _df_mm_mes.empty:
+            _df_mm_d1 = _df_mm_mes[_df_mm_mes["dia_num"] < _hoje_mm.day]
+            _gmv_mm_real = float(_df_mm_d1["gmv"].sum())
+            _uteis_passados_mm = sum(
+                1 for d in _df_mm_d1["dia_num"].unique()
+                if date(_hoje_mm.year, _hoje_mm.month, int(d)).weekday() < 5
+            )
+            _uteis_mes_mm = sum(
+                1 for d in range(1, _mr_mm(_hoje_mm.year, _hoje_mm.month)[1] + 1)
+                if date(_hoje_mm.year, _hoje_mm.month, d).weekday() < 5
+            )
+            _proj_mes_mm = (_gmv_mm_real / _uteis_passados_mm * _uteis_mes_mm) if _uteis_passados_mm > 0 else 0
+            # Extrapola para o ano com base na proporção do mês atual vs ano anterior
+            _gmv_ano_ant_mm = float(_df_mm_ano[_df_mm_ano["ano"] == _hoje_mm.year - 1]["gmv"].sum()) if not _df_mm_ano.empty else 0
+            _gmv_per_mes_ant = _gmv_ano_ant_mm / 12 if _gmv_ano_ant_mm > 0 else 0
+            _gmv_ano_real_mm = float(_df_mm_ano[_df_mm_ano["ano"] == _hoje_mm.year]["gmv"].sum())
+            _ratio_mm = (_gmv_ano_real_mm / (_gmv_per_mes_ant * _hoje_mm.month)) if _gmv_per_mes_ant > 0 else 1
+            _proj_ano_mm = _gmv_ano_ant_mm * _ratio_mm if _gmv_ano_ant_mm > 0 else 0
 
-        # GMV total realizado até D-1
-        _gmv_mm_real = float(_df_mm_d1["gmv"].sum())
+        # Pivot: anos × modais
+        _df_pivot_ano = _df_mm_ano.pivot_table(index="ano", columns="modal", values="gmv", aggfunc="sum", fill_value=0).reset_index()
+        _df_pivot_ano.columns = [str(c) for c in _df_pivot_ano.columns]
+        _modais_ok = [m for m in _MODAIS_ORDER if m in _df_pivot_ano.columns]
+        _anos_str  = _df_pivot_ano["ano"].astype(str).tolist()
+        _ano_atual_str = str(_hoje_mm.year)
 
-        # Dias úteis passados (D-1) e total do mês
-        _dias_uteis_mm = sorted(_df_mm_d1["dia_num"].unique())
-        _uteis_passados_mm = sum(
-            1 for d in _dias_uteis_mm
-            if date(_hoje_mm.year, _hoje_mm.month, int(d)).weekday() < 5
-        )
-        _uteis_mes_mm = sum(
-            1 for d in range(1, _mr_mm(_hoje_mm.year, _hoje_mm.month)[1] + 1)
-            if date(_hoje_mm.year, _hoje_mm.month, d).weekday() < 5
-        )
-        _proj_mm = (_gmv_mm_real / _uteis_passados_mm * _uteis_mes_mm) if _uteis_passados_mm > 0 else 0
+        # Totais por ano (para o label no topo)
+        _totais_ano = _df_pivot_ano[_modais_ok].sum(axis=1).tolist()
 
-        # KPIs
-        _col1_mm, _col2_mm, _col3_mm = st.columns(3)
-        with _col1_mm:
-            st.markdown(f'<div class="kpi-card"><p class="kpi-label">GMV Realizado até D-1</p><p class="kpi-value">{brl(_gmv_mm_real)}</p></div>', unsafe_allow_html=True)
-        with _col2_mm:
-            st.markdown(f'<div class="kpi-card"><p class="kpi-label">Projeção do Mês (dias úteis)</p><p class="kpi-value">{brl(_proj_mm)}</p></div>', unsafe_allow_html=True)
-        with _col3_mm:
-            _pct_mm = (_gmv_mm_real / _proj_mm * 100) if _proj_mm > 0 else 0
-            st.markdown(f'<div class="kpi-card"><p class="kpi-label">% do Mês Realizado</p><p class="kpi-value">{_pct_mm:.1f}%</p></div>', unsafe_allow_html=True)
-
-        st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
-
-        # Gráfico de barras empilhadas diário por modal (D-1)
-        _df_pivot = _df_mm_d1.pivot_table(index="dia_num", columns="modal", values="gmv", aggfunc="sum", fill_value=0).reset_index()
-        _df_pivot.columns = [str(c) for c in _df_pivot.columns]  # normaliza nomes
-        _modais_presentes = [m for m in ["flight", "hotel", "auto", "bus", "generic"] if m in _df_pivot.columns]
-
-        # Total real por dia (soma direta do dataframe original — todos os modais)
-        _totais_por_dia = _df_mm_d1.groupby("dia_num")["gmv"].sum()
-        _dias_ordenados = _df_pivot["dia_num"].tolist()
-        _totais_dia = [_totais_por_dia.get(d, 0) for d in _dias_ordenados]
-
-        _fig_mm = go.Figure()
-        for _m in _modais_presentes:
-            _fig_mm.add_trace(go.Bar(
-                x=_df_pivot["dia_num"],
-                y=_df_pivot[_m],
-                name=_MODAL_LABELS.get(_m, _m),
-                marker_color=_MODAL_CORES.get(_m, "#94A3B8"),
+        col_chart_mm, col_table_mm = st.columns([3, 2], gap="large")
+        with col_chart_mm:
+            _fig_mm = go.Figure()
+            for _m in _modais_ok:
+                _fig_mm.add_trace(go.Bar(
+                    name=_MODAL_LABELS.get(_m, _m),
+                    x=_anos_str,
+                    y=_df_pivot_ano[_m],
+                    marker_color=_MODAL_CORES.get(_m, "#94A3B8"),
+                    hovertemplate=f"<b>%{{x}}</b><br>{_MODAL_LABELS.get(_m, _m)}: R$ %{{y:,.0f}}<extra></extra>",
+                ))
+            # Projeção empilhada no ano atual
+            _gmv_atual_total = float(_df_pivot_ano[_df_pivot_ano["ano"] == str(_hoje_mm.year)][_modais_ok].sum(axis=1).iloc[0]) if _ano_atual_str in _anos_str else 0
+            _proj_resto_mm = max(0.0, _proj_ano_mm - _gmv_atual_total)
+            if _proj_resto_mm > 0:
+                _proj_vals_mm = [_proj_resto_mm if a == _ano_atual_str else 0 for a in _anos_str]
+                _fig_mm.add_trace(go.Bar(
+                    name="Projeção",
+                    x=_anos_str, y=_proj_vals_mm,
+                    marker_color=hex_to_rgba("#F59E0B", 0.55),
+                    hovertemplate="<b>%{x}</b><br>Projeção restante: R$ %{y:,.0f}<extra></extra>",
+                ))
+            # Totais no topo
+            _labels_topo = []
+            for _a, _t in zip(_anos_str, _totais_ano):
+                if _a == _ano_atual_str and _proj_ano_mm > 0:
+                    _labels_topo.append(f"<b>{brl(_proj_ano_mm)}*</b>")
+                else:
+                    _labels_topo.append(f"<b>{brl(_t)}</b>")
+            _fig_mm.add_trace(go.Scatter(
+                x=_anos_str,
+                y=[_t + _proj_resto_mm if _a == _ano_atual_str else _t for _a, _t in zip(_anos_str, _totais_ano)],
+                mode="text",
+                text=_labels_topo,
+                textposition="top center",
+                textfont=dict(size=11, color="#334155"),
+                showlegend=False,
+                hoverinfo="skip",
             ))
-        # Total no topo de cada coluna
-        _fig_mm.add_trace(go.Scatter(
-            x=_dias_ordenados,
-            y=_totais_dia,
-            mode="text",
-            text=[f"<b>R$ {v/1_000_000:.2f}M</b>" for v in _totais_dia],
-            textposition="top center",
-            textfont=dict(size=11, color="#334155"),
-            showlegend=False,
-            hoverinfo="skip",
-        ))
-        _fig_mm.update_layout(barmode="stack", xaxis_title="Dia", yaxis_title="GMV (R$)", yaxis_tickprefix="R$ ")
-        st.plotly_chart(plotly_layout(_fig_mm, 400), use_container_width=True)
+            _fig_mm.update_layout(
+                barmode="stack",
+                showlegend=True,
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0, font=dict(size=12)),
+            )
+            _fig_mm.update_yaxes(tickprefix="R$ ")
+            _fig_mm.update_xaxes(type="category")
+            st.plotly_chart(plotly_layout(_fig_mm, 320), use_container_width=True)
 
-        # Tabela resumo por modal
-        _resumo_mm = (
-            _df_mm_d1.groupby("modal")["gmv"].sum()
-            .reset_index()
-            .rename(columns={"modal": "Modal", "gmv": "GMV Realizado (R$)"})
-        )
-        _resumo_mm["Modal"] = _resumo_mm["Modal"].map(_MODAL_LABELS).fillna(_resumo_mm["Modal"])
-        _resumo_mm["% do Total"] = (_resumo_mm["GMV Realizado (R$)"] / _gmv_mm_real * 100).round(1)
-        _resumo_mm["GMV Realizado (R$)"] = _resumo_mm["GMV Realizado (R$)"].apply(lambda x: brl(x))
-        _resumo_mm = _resumo_mm.sort_values("% do Total", ascending=False)
-        st.dataframe(_resumo_mm, use_container_width=True, hide_index=True)
+        with col_table_mm:
+            _resumo_anos = _df_mm_ano.groupby("ano").agg(gmv=("gmv", "sum"), reservas=("reservas", "sum")).reset_index()
+            _resumo_anos = _resumo_anos.sort_values("ano")
+            _resumo_anos["Var. YoY"] = _resumo_anos["gmv"].pct_change() * 100
+            _resumo_anos["GMV"] = _resumo_anos.apply(
+                lambda r: f"{brl(r['gmv'])} *" if r["ano"] == _hoje_mm.year and _proj_ano_mm > 0 else brl(r["gmv"]), axis=1
+            )
+            st.dataframe(
+                _resumo_anos[["ano", "reservas", "GMV", "Var. YoY"]].rename(columns={"ano": "Ano", "reservas": "Reservas"}),
+                use_container_width=True, hide_index=True, height=300,
+                column_config={
+                    "Ano":      st.column_config.NumberColumn("Ano",      format="%d"),
+                    "GMV":      st.column_config.TextColumn("GMV"),
+                    "Reservas": st.column_config.NumberColumn("Reservas", format="%d"),
+                    "Var. YoY": st.column_config.NumberColumn("Var. YoY", format="%.1f%%"),
+                },
+            )
+            if _proj_ano_mm > 0:
+                st.caption("* Projeção baseada na sazonalidade do ano anterior")
 
 # ══════════════════════════════════════════════════════════════════════════════
 # SEÇÃO: GMV DE INCENTIVO

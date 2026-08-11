@@ -4695,9 +4695,9 @@ elif secao == "📊  GMV":
             x=_df_pivot["dia_num"],
             y=_totais_dia,
             mode="text",
-            text=[f"R$ {v/1_000:.0f}k" for v in _totais_dia],
+            text=[f"<b>R$ {v/1_000_000:.2f}M</b>" for v in _totais_dia],
             textposition="top center",
-            textfont=dict(size=10, color="#334155"),
+            textfont=dict(size=11, color="#334155"),
             showlegend=False,
             hoverinfo="skip",
         ))

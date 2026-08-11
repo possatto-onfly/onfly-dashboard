@@ -4438,20 +4438,20 @@ elif secao == "📊  GMV":
                 st.error(f"Erro ao conectar ao BigQuery: {e}")
 
         if resumo is not None:
-            # ── Projeção do mês (dias úteis — exclui sábado e domingo) ───────────
+            # ── Projeção do mês (dias úteis D-1 — exclui sáb/dom e dia atual) ────
             from calendar import monthrange as _mr
             import numpy as _np_g
             _hoje_g   = date.today()
             _df_tend  = q_tendencia_diario(_hoje_g.month, _hoje_g.year)
             if not _df_tend.empty:
-                _gmv_g    = float(_df_tend["gmv"].sum())
-                # Dias úteis decorridos (dias com dados que não são sáb/dom)
-                _datas_tend = [
-                    date(_hoje_g.year, _hoje_g.month, int(d))
-                    for d in _df_tend["dia_num"].unique()
+                # Exclui o dia atual (D-1)
+                _df_tend_d1 = _df_tend[_df_tend["dia_num"] < _hoje_g.day]
+                _gmv_g    = float(_df_tend_d1["gmv"].sum())
+                # Dias úteis decorridos até D-1
+                _uteis_passados = sum(
+                    1 for d in _df_tend_d1["dia_num"].unique()
                     if date(_hoje_g.year, _hoje_g.month, int(d)).weekday() < 5
-                ]
-                _uteis_passados = len(_datas_tend)
+                )
                 # Total de dias úteis no mês
                 _uteis_mes = sum(
                     1 for d in range(1, _mr(_hoje_g.year, _hoje_g.month)[1] + 1)
@@ -7047,13 +7047,16 @@ elif secao == "📈  Tendência":
         _df_at  = q_tendencia_diario(_mes_at, _ano_at)
         _df_ant = q_tendencia_diario(_mes_ant, _ano_ant)
 
-    # ── Cálculos de projeção (dias úteis — exclui sáb/dom) ───────────────────
+    # ── Cálculos de projeção (dias úteis D-1 — exclui sáb/dom e dia atual) ──
     if not _df_at.empty:
-        _gmv_so_far     = float(_df_at["gmv"].sum())
-        _gr_so_far      = float(_df_at["gross_revenue"].sum())
-        # Dias úteis com dados no mês atual
+        # Exclui o dia atual (D-1)
+        _df_at_d1   = _df_at[_df_at["dia_num"] < _hoje_t.day]
+        _gmv_so_far = float(_df_at_d1["gmv"].sum()) if not _df_at_d1.empty else float(_df_at["gmv"].sum())
+        _gr_so_far  = float(_df_at["gross_revenue"].sum())
+        _df_base    = _df_at_d1 if not _df_at_d1.empty else _df_at
+        # Dias úteis com dados até D-1
         _uteis_passados_t = sum(
-            1 for d in _df_at["dia_num"].unique()
+            1 for d in _df_base["dia_num"].unique()
             if date(_ano_at, _mes_at, int(d)).weekday() < 5
         )
         # Total de dias úteis no mês atual
@@ -7063,7 +7066,7 @@ elif secao == "📈  Tendência":
         )
         _dias_com_dados = _uteis_passados_t or len(_df_at)
         _proj_gmv       = (_gmv_so_far / _uteis_passados_t * _uteis_mes_t) if _uteis_passados_t > 0 else 0
-        _proj_tr        = (_gr_so_far / _gmv_so_far * 100) if _gmv_so_far > 0 else 0
+        _proj_tr        = (_gr_so_far / float(_df_at["gmv"].sum()) * 100) if float(_df_at["gmv"].sum()) > 0 else 0
     else:
         _dias_com_dados = 0
         _gmv_so_far = _gr_so_far = _proj_gmv = _proj_tr = 0.0

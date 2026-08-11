@@ -4709,7 +4709,8 @@ elif secao == "📊  GMV":
                     hovertemplate=f"<b>%{{x}}</b><br>{_MODAL_LABELS.get(_m, _m)}: R$ %{{y:,.0f}}<extra></extra>",
                 ))
             # Projeção empilhada no ano atual
-            _gmv_atual_total = float(_df_pivot_ano[_df_pivot_ano["ano"] == str(_hoje_mm.year)][_modais_ok].sum(axis=1).iloc[0]) if _ano_atual_str in _anos_str else 0
+            _mask_ano_at = _df_pivot_ano["ano"].astype(int) == _hoje_mm.year
+            _gmv_atual_total = float(_df_pivot_ano[_mask_ano_at][_modais_ok].sum(axis=1).iloc[0]) if _mask_ano_at.any() else 0
             _proj_resto_mm = max(0.0, _proj_ano_mm - _gmv_atual_total)
             if _proj_resto_mm > 0:
                 _proj_vals_mm = [_proj_resto_mm if a == _ano_atual_str else 0 for a in _anos_str]

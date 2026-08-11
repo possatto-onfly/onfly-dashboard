@@ -4689,8 +4689,20 @@ elif secao == "📊  GMV":
                 name=_MODAL_LABELS.get(_m, _m),
                 marker_color=_MODAL_CORES.get(_m, "#94A3B8"),
             ))
+        # Total no topo de cada coluna
+        _totais_dia = _df_pivot[_modais_presentes].sum(axis=1)
+        _fig_mm.add_trace(go.Scatter(
+            x=_df_pivot["dia_num"],
+            y=_totais_dia,
+            mode="text",
+            text=[f"R$ {v/1_000:.0f}k" for v in _totais_dia],
+            textposition="top center",
+            textfont=dict(size=10, color="#334155"),
+            showlegend=False,
+            hoverinfo="skip",
+        ))
         _fig_mm.update_layout(barmode="stack", xaxis_title="Dia", yaxis_title="GMV (R$)", yaxis_tickprefix="R$ ")
-        st.plotly_chart(plotly_layout(_fig_mm, 380), use_container_width=True)
+        st.plotly_chart(plotly_layout(_fig_mm, 400), use_container_width=True)
 
         # Tabela resumo por modal
         _resumo_mm = (

@@ -2726,32 +2726,26 @@ def q_cias_balanceamento(inicio: str, fim: str) -> list:
 @st.cache_data(ttl=300, show_spinner=False)
 def q_balanceamento(inicio: str, fim: str, cias_sel: tuple) -> pd.DataFrame:
     """Nacional/Internacional × Manual/Automático.
-    Nacional = LATAM, TAM, AZUL, AZUL CONECTA, GOL (independente do destino).
-    Internacional = todas as demais cias operadoras.
-    Filtro por cia aplicado quando cias_sel não está vazio.
+    Critério: is_international do silver_all_emissions (baseado no destino do voo).
+    Filtro por cia via TABLE_SEG quando cias_sel não está vazio.
     """
     _manual_sql  = ", ".join(f"'{c}'" for c in sorted(_CANAIS_MANUAL))
-    _nacionais   = "'LATAM', 'TAM', 'AZUL', 'AZUL CONECTA', 'GOL'"
-    _filtro_cia  = (f"AND s.cia IN ({', '.join(f'{chr(39)}{c}{chr(39)}' for c in cias_sel)})"
-                    if cias_sel else "")
-    q = f"""
-        WITH segs AS (
-            SELECT
-                REPLACE(RTRIM(uuid, '_'), '_flight', '') AS seg_protocol,
-                UPPER(TRIM(company_operator))            AS cia
-            FROM `{TABLE_SEG}`
+    _filtro_cia  = ""
+    if cias_sel:
+        _cias_sql = ", ".join(f"'{c}'" for c in cias_sel)
+        _filtro_cia = f"""AND e.uuid IN (
+            SELECT RTRIM(uuid, '_') FROM `{TABLE_SEG}`
             WHERE segment = 0 AND step = 1
-              AND company_operator IS NOT NULL AND TRIM(company_operator) != ''
-            QUALIFY ROW_NUMBER() OVER (PARTITION BY uuid ORDER BY company_operator) = 1
-        )
+              AND UPPER(TRIM(company_operator)) IN ({_cias_sql})
+        )"""
+    q = f"""
         SELECT
-            CASE WHEN s.cia IN ({_nacionais}) THEN 'Nacional' ELSE 'Internacional' END AS escopo,
+            CASE WHEN e.is_international = 1 THEN 'Internacional' ELSE 'Nacional' END AS escopo,
             CASE WHEN UPPER(TRIM(e.consolidator_unified)) IN ({_manual_sql})
                  THEN 'Manual' ELSE 'Automático' END                                   AS canal,
             COUNT(DISTINCT e.uuid)                                                     AS reservas,
             ROUND(SUM(e.total_amount_currency_brl), 2)                                AS gmv
         FROM `{TABLE}` e
-        JOIN segs s ON s.seg_protocol = REPLACE(e.uuid, '_flight', '')
         WHERE e.type = 'flight' AND e.status = 2
           AND e.created_at >= '{inicio}'
           AND e.created_at < DATE_ADD('{fim}', INTERVAL 1 DAY)
@@ -2770,26 +2764,21 @@ def q_balanceamento(inicio: str, fim: str, cias_sel: tuple) -> pd.DataFrame:
 def q_balanceamento_canais(inicio: str, fim: str, cias_sel: tuple) -> pd.DataFrame:
     """Detalha onde foram feitas as emissões MANUAIS, por canal e escopo."""
     _manual_sql = ", ".join(f"'{c}'" for c in sorted(_CANAIS_MANUAL))
-    _nacionais  = "'LATAM', 'TAM', 'AZUL', 'AZUL CONECTA', 'GOL'"
-    _filtro_cia = (f"AND s.cia IN ({', '.join(f'{chr(39)}{c}{chr(39)}' for c in cias_sel)})"
-                   if cias_sel else "")
-    q = f"""
-        WITH segs AS (
-            SELECT
-                REPLACE(RTRIM(uuid, '_'), '_flight', '') AS seg_protocol,
-                UPPER(TRIM(company_operator))            AS cia
-            FROM `{TABLE_SEG}`
+    _filtro_cia = ""
+    if cias_sel:
+        _cias_sql = ", ".join(f"'{c}'" for c in cias_sel)
+        _filtro_cia = f"""AND e.uuid IN (
+            SELECT RTRIM(uuid, '_') FROM `{TABLE_SEG}`
             WHERE segment = 0 AND step = 1
-              AND company_operator IS NOT NULL AND TRIM(company_operator) != ''
-            QUALIFY ROW_NUMBER() OVER (PARTITION BY uuid ORDER BY company_operator) = 1
-        )
+              AND UPPER(TRIM(company_operator)) IN ({_cias_sql})
+        )"""
+    q = f"""
         SELECT
-            CASE WHEN s.cia IN ({_nacionais}) THEN 'Nacional' ELSE 'Internacional' END AS escopo,
+            CASE WHEN e.is_international = 1 THEN 'Internacional' ELSE 'Nacional' END AS escopo,
             COALESCE(NULLIF(TRIM(e.consolidator_unified), ''), 'Não informado')        AS canal,
             COUNT(DISTINCT e.uuid)                                                     AS reservas,
             ROUND(SUM(e.total_amount_currency_brl), 2)                                AS gmv
         FROM `{TABLE}` e
-        JOIN segs s ON s.seg_protocol = REPLACE(e.uuid, '_flight', '')
         WHERE e.type = 'flight' AND e.status = 2
           AND UPPER(TRIM(e.consolidator_unified)) IN ({_manual_sql})
           AND e.created_at >= '{inicio}'
@@ -2810,27 +2799,22 @@ def q_balanceamento_canais(inicio: str, fim: str, cias_sel: tuple) -> pd.DataFra
 def q_balanceamento_emissores(inicio: str, fim: str, cias_sel: tuple) -> pd.DataFrame:
     """Ranking de emissores manuais por escopo (Nacional/Internacional)."""
     _manual_sql = ", ".join(f"'{c}'" for c in sorted(_CANAIS_MANUAL))
-    _nacionais  = "'LATAM', 'TAM', 'AZUL', 'AZUL CONECTA', 'GOL'"
-    _filtro_cia = (f"AND s.cia IN ({', '.join(f'{chr(39)}{c}{chr(39)}' for c in cias_sel)})"
-                   if cias_sel else "")
-    q = f"""
-        WITH segs AS (
-            SELECT
-                REPLACE(RTRIM(uuid, '_'), '_flight', '') AS seg_protocol,
-                UPPER(TRIM(company_operator))            AS cia
-            FROM `{TABLE_SEG}`
+    _filtro_cia = ""
+    if cias_sel:
+        _cias_sql = ", ".join(f"'{c}'" for c in cias_sel)
+        _filtro_cia = f"""AND e.uuid IN (
+            SELECT RTRIM(uuid, '_') FROM `{TABLE_SEG}`
             WHERE segment = 0 AND step = 1
-              AND company_operator IS NOT NULL AND TRIM(company_operator) != ''
-            QUALIFY ROW_NUMBER() OVER (PARTITION BY uuid ORDER BY company_operator) = 1
-        )
+              AND UPPER(TRIM(company_operator)) IN ({_cias_sql})
+        )"""
+    q = f"""
         SELECT
-            CASE WHEN s.cia IN ({_nacionais}) THEN 'Nacional' ELSE 'Internacional' END AS escopo,
+            CASE WHEN e.is_international = 1 THEN 'Internacional' ELSE 'Nacional' END AS escopo,
             COALESCE(NULLIF(TRIM(e.emitter_name), ''), 'Não informado')                AS emissor,
             COALESCE(NULLIF(TRIM(e.consolidator_unified), ''), 'Não informado')        AS canal,
             COUNT(DISTINCT e.uuid)                                                     AS reservas,
             ROUND(SUM(e.total_amount_currency_brl), 2)                                AS gmv
         FROM `{TABLE}` e
-        JOIN segs s ON s.seg_protocol = REPLACE(e.uuid, '_flight', '')
         WHERE e.type = 'flight' AND e.status = 2
           AND UPPER(TRIM(e.consolidator_unified)) IN ({_manual_sql})
           AND e.created_at >= '{inicio}'

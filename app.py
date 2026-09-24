@@ -4413,11 +4413,15 @@ Você deve gerar queries BigQuery Standard SQL usando EXATAMENTE os nomes de tab
    - Ticket Médio = AVG(total_amount_currency_brl)
 
 2. `dw-onfly-prd.travel_core.gold_item_summaries_flight_by_protocol_traveler_segment_leg`
-   Campos: uuid (FK para tabela 1 via USING(uuid)), departure_airport_code (IATA origem),
+   Campos: uuid (STRING — ATENÇÃO: termina com '_', ex: '04N95J_flight_'), departure_airport_code (IATA origem),
    arrival_airport_code (IATA destino), segment (INTEGER, 0=ida/1=volta),
    step (INTEGER, 1=primeiro leg), company_operator (código IATA da cia),
    departure_date_hour (DATETIME), arrival_date_hour (DATETIME)
    — Para pegar apenas o primeiro trecho de saída: WHERE segment = 0 AND step = 1
+   — IMPORTANTE: o uuid desta tabela tem '_' no final. O JOIN correto com a tabela 1 é:
+     JOIN `gold_item...` g ON RTRIM(g.uuid, '_') = e.uuid
+     NUNCA use USING(uuid) — os valores não são iguais.
+   — IMPORTANTE: esta tabela só tem dados a partir de abril/2026. Para períodos anteriores, ela não retorna resultados.
 
 3. `dw-onfly-prd.onfly_dim_shared.silver_companies`
    Campos: company_id (INTEGER), name (STRING), social_name (STRING), cnpj (STRING)

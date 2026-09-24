@@ -2981,7 +2981,10 @@ def q_lista_cias() -> dict:
             codigo = raw if len(raw) == 2 else nomes_iata.get(raw, raw)
             codigo = IATA_NORMALIZACAO.get(codigo, codigo)
         agrupado.setdefault(codigo, []).append(raw)
-    return {k: tuple(v) for k, v in sorted(agrupado.items())}
+    return {k: tuple(v) for k, v in sorted(
+        agrupado.items(),
+        key=lambda kv: IATA_NOMES.get(kv[0], kv[0]).upper()
+    )}
 
 def _in_cias(variantes: tuple) -> str:
     vals = ", ".join(f"'{v}'" for v in variantes)
@@ -3628,23 +3631,64 @@ def q_lista_aeroportos() -> list[str]:
     return [r.ap for r in rows]
 
 @st.cache_data(ttl=300, show_spinner=False)
-def q_destinos_por_aeroporto(aeroporto: str, inicio: str, fim: str) -> pd.DataFrame:
+def q_total_aeroporto(aeroporto: str, inicio: str, fim: str) -> dict:
+    """GMV e reservas corretos: cada booking (uuid) contado uma única vez, mesmo que
+    apareça em múltiplos trechos (ida + volta, conexões) ou múltiplos viajantes."""
     ap = aeroporto.upper().strip()
     q = f"""
+        WITH uuids AS (
+            SELECT DISTINCT RTRIM(s.uuid, '_') AS uuid_e
+            FROM `{TABLE_SEG}` s
+            WHERE s.departure_airport_code != s.arrival_airport_code
+              AND (
+                  UPPER(TRIM(s.departure_airport_code)) = '{ap}'
+                  OR UPPER(TRIM(s.arrival_airport_code)) = '{ap}'
+              )
+        )
         SELECT
-            s.departure_airport_code                                           AS Origem,
-            s.arrival_airport_code                                      AS Destino,
-            COUNT(DISTINCT e.uuid)                             AS Reservas,
-            ROUND(SUM(e.total_amount_currency_brl), 2)         AS GMV,
-            STRING_AGG(DISTINCT UPPER(TRIM(s.company_operator)) ORDER BY UPPER(TRIM(s.company_operator))) AS Cias
-        FROM `{TABLE_SEG}` s
-        JOIN `{TABLE}` e ON e.uuid = RTRIM(s.uuid, '_')
+            COUNT(DISTINCT u.uuid_e)                       AS reservas,
+            ROUND(SUM(e.total_amount_currency_brl), 2)     AS gmv
+        FROM uuids u
+        JOIN `{TABLE}` e ON e.uuid = u.uuid_e
         WHERE e.type = 'flight'
           AND e.status = 2
-          AND s.departure_airport_code != s.arrival_airport_code
           AND e.created_at >= '{inicio}'
           AND e.created_at < DATE_ADD('{fim}', INTERVAL 1 DAY)
-          AND (UPPER(TRIM(s.departure_airport_code)) = '{ap}' OR UPPER(TRIM(s.arrival_airport_code)) = '{ap}')
+    """
+    row = list(bq_client().query(q).result())[0]
+    return {"reservas": int(row.reservas or 0), "gmv": float(row.gmv or 0)}
+
+@st.cache_data(ttl=300, show_spinner=False)
+def q_destinos_por_aeroporto(aeroporto: str, inicio: str, fim: str) -> pd.DataFrame:
+    ap = aeroporto.upper().strip()
+    # CTE dedup: 1 linha por (Origem, Destino, uuid_emissao, cia) — evita contar
+    # N× o GMV quando há N viajantes no mesmo booking ou N segmentos do mesmo uuid.
+    q = f"""
+        WITH seg_uniq AS (
+            SELECT DISTINCT
+                UPPER(TRIM(s.departure_airport_code)) AS Origem,
+                UPPER(TRIM(s.arrival_airport_code))   AS Destino,
+                RTRIM(s.uuid, '_')                    AS uuid_e,
+                UPPER(TRIM(s.company_operator))       AS cia
+            FROM `{TABLE_SEG}` s
+            WHERE s.departure_airport_code != s.arrival_airport_code
+              AND (
+                  UPPER(TRIM(s.departure_airport_code)) = '{ap}'
+                  OR UPPER(TRIM(s.arrival_airport_code)) = '{ap}'
+              )
+        )
+        SELECT
+            u.Origem,
+            u.Destino,
+            COUNT(DISTINCT u.uuid_e)                              AS Reservas,
+            ROUND(SUM(e.total_amount_currency_brl), 2)            AS GMV,
+            STRING_AGG(DISTINCT u.cia ORDER BY u.cia)             AS Cias
+        FROM seg_uniq u
+        JOIN `{TABLE}` e ON e.uuid = u.uuid_e
+        WHERE e.type = 'flight'
+          AND e.status = 2
+          AND e.created_at >= '{inicio}'
+          AND e.created_at < DATE_ADD('{fim}', INTERVAL 1 DAY)
         GROUP BY 1, 2
         ORDER BY GMV DESC
     """
@@ -5172,7 +5216,10 @@ elif secao == "✈️  Cia Aérea":
         st.info("Nenhuma companhia encontrada.")
         st.stop()
 
-    opcoes = {cia: f"{cia} — {IATA_NOMES.get(cia, 'Não identificada')}" for cia in lista_cias}
+    opcoes = {
+        cia: f"{IATA_NOMES[cia]} ({cia})" if cia in IATA_NOMES else cia
+        for cia in lista_cias
+    }
 
     col_sel, _ = st.columns([2, 5])
     with col_sel:
@@ -5385,7 +5432,10 @@ elif secao == "🗺️  Distribuição":
             st.error(f"Erro ao conectar ao BigQuery: {e}")
             st.stop()
 
-    opcoes_cias = {cia: f"{cia} — {IATA_NOMES.get(cia, 'Não identificada')}" for cia in lista_cias_dist}
+    opcoes_cias = {
+        cia: f"{IATA_NOMES[cia]} ({cia})" if cia in IATA_NOMES else cia
+        for cia in lista_cias_dist
+    }
     dist_dados  = load_distribuicao()
 
     # ── Session state ─────────────────────────────────────────────────────────
@@ -5713,7 +5763,8 @@ elif secao == "🌍  Destino":
     else:
         with st.spinner(f"Consultando rotas para {aeroporto}..."):
             try:
-                df_dest = q_destinos_por_aeroporto(aeroporto, i_str, f_str)
+                df_dest   = q_destinos_por_aeroporto(aeroporto, i_str, f_str)
+                tot_ap    = q_total_aeroporto(aeroporto, i_str, f_str)
             except Exception as e:
                 st.error(f"Erro ao consultar BigQuery: {e}")
                 st.stop()
@@ -5721,9 +5772,9 @@ elif secao == "🌍  Destino":
         if df_dest.empty:
             st.warning(f"Nenhuma rota encontrada para **{aeroporto}**.")
         else:
-            # KPIs resumo
-            total_reservas = df_dest["Reservas"].sum()
-            total_gmv      = df_dest["GMV"].sum()
+            # KPIs resumo — total via query dedicada (cada booking contado 1×)
+            total_reservas = tot_ap["reservas"]
+            total_gmv      = tot_ap["gmv"]
             total_rotas    = len(df_dest)
 
             st.markdown("<div style='height:24px'></div>", unsafe_allow_html=True)
@@ -7003,7 +7054,7 @@ elif secao == "🛫  Quem voa o que?":
             st.stop()
 
     _opcoes_qvq = {
-        cia: f"{cia} — {IATA_NOMES.get(cia, 'Não identificada')}"
+        cia: f"{IATA_NOMES[cia]} ({cia})" if cia in IATA_NOMES else cia
         for cia in lista_cias_qvq
     }
 

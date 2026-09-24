@@ -5811,19 +5811,15 @@ elif secao == "🌍  Destino":
 
             # ── Saindo deste aeroporto ────────────────────────────────────────
             df_saindo = df_dest[df_dest["Origem"].str.upper().str.strip() == aeroporto].copy()
-            gmv_saindo = df_saindo["GMV"].sum()
             res_saindo = df_saindo["Reservas"].sum()
             st.markdown(f'<div class="sec-header-wrap"><p class="sec-header">✈️ Saindo de {aeroporto}</p></div>', unsafe_allow_html=True)
-            c1, c2, c3 = st.columns(3)
+            c1, c2 = st.columns(2)
             with c1:
                 st.markdown(f"""<div class="kpi-card"><p class="kpi-label">Rotas</p>
                     <p class="kpi-value">{len(df_saindo):,}</p></div>""", unsafe_allow_html=True)
             with c2:
                 st.markdown(f"""<div class="kpi-card"><p class="kpi-label">Reservas</p>
                     <p class="kpi-value">{res_saindo:,}</p></div>""", unsafe_allow_html=True)
-            with c3:
-                st.markdown(f"""<div class="kpi-card"><p class="kpi-label">GMV</p>
-                    <p class="kpi-value">{brl(gmv_saindo)}</p></div>""", unsafe_allow_html=True)
             st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
             if df_saindo.empty:
                 st.info("Nenhuma rota saindo deste aeroporto no período.")
@@ -5834,19 +5830,15 @@ elif secao == "🌍  Destino":
 
             # ── Chegando neste aeroporto ──────────────────────────────────────
             df_chegando = df_dest[df_dest["Destino"].str.upper().str.strip() == aeroporto].copy()
-            gmv_chegando = df_chegando["GMV"].sum()
             res_chegando = df_chegando["Reservas"].sum()
             st.markdown(f'<div class="sec-header-wrap"><p class="sec-header">🛬 Chegando em {aeroporto}</p></div>', unsafe_allow_html=True)
-            c4, c5, c6 = st.columns(3)
+            c4, c5 = st.columns(2)
             with c4:
                 st.markdown(f"""<div class="kpi-card"><p class="kpi-label">Rotas</p>
                     <p class="kpi-value">{len(df_chegando):,}</p></div>""", unsafe_allow_html=True)
             with c5:
                 st.markdown(f"""<div class="kpi-card"><p class="kpi-label">Reservas</p>
                     <p class="kpi-value">{res_chegando:,}</p></div>""", unsafe_allow_html=True)
-            with c6:
-                st.markdown(f"""<div class="kpi-card"><p class="kpi-label">GMV</p>
-                    <p class="kpi-value">{brl(gmv_chegando)}</p></div>""", unsafe_allow_html=True)
             st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
             if df_chegando.empty:
                 st.info("Nenhuma rota chegando neste aeroporto no período.")

@@ -1641,22 +1641,35 @@ def q_quem_voa_o_que(variantes: tuple, inicio: str, fim: str) -> pd.DataFrame:
 # ─── Queries: Pricing ─────────────────────────────────────────────────────────
 @st.cache_data(ttl=300, show_spinner=False)
 def q_pricing(origem: str, destino: str, inicio: str, fim: str) -> pd.DataFrame:
+    # TABLE_SEG only has data from ~Apr 2026; use silver_flight_orders for full history
     q = f"""
+        WITH fo AS (
+            SELECT
+                SPLIT(fo.uuid_protocol, '_')[OFFSET(0)] AS proto_id,
+                fo.origin_date                           AS flight_date,
+                UPPER(TRIM(fo.standard_airline))         AS cia_raw,
+                LEFT(fo.departure_time, 5)               AS departure_time,
+                LEFT(fo.arrival_time,   5)               AS arrival_time
+            FROM `{TABLE_FLIGHT_ORDERS}` fo
+            WHERE fo.uuid_protocol LIKE '%_ida'
+              AND UPPER(TRIM(fo.origin))       = '{origem.upper().strip()}'
+              AND UPPER(TRIM(fo.destination))  = '{destino.upper().strip()}'
+            QUALIFY ROW_NUMBER() OVER (
+                PARTITION BY SPLIT(fo.uuid_protocol, '_')[OFFSET(0)]
+                ORDER BY fo.uuid_protocol
+            ) = 1
+        )
         SELECT
-            DATE(e.created_at)                               AS data_emissao,
-            DATE(s.departure_date_hour)                      AS flight_date,
-            UPPER(TRIM(s.company_operator))                  AS cia_raw,
-            e.total_amount_currency_brl                      AS preco,
-            FORMAT_DATETIME('%H:%M', s.departure_date_hour) AS departure_time,
-            FORMAT_DATETIME('%H:%M', s.arrival_date_hour)   AS arrival_time,
-            CAST(s.segment + 1 AS INT64)                    AS trecho
+            DATE(e.created_at)          AS data_emissao,
+            fo.flight_date,
+            fo.cia_raw,
+            e.total_amount_currency_brl AS preco,
+            fo.departure_time,
+            fo.arrival_time
         FROM `{TABLE}` e
-        JOIN `{TABLE_SEG}` s ON RTRIM(s.uuid, '_') = e.uuid
+        JOIN fo ON fo.proto_id = SPLIT(e.uuid, '_')[OFFSET(0)]
         WHERE e.type = 'flight'
           AND e.status = 2
-          AND s.segment = 0 AND s.step = 1
-          AND UPPER(TRIM(s.departure_airport_code)) = '{origem.upper().strip()}'
-          AND UPPER(TRIM(s.arrival_airport_code))   = '{destino.upper().strip()}'
           AND e.created_at >= '{inicio}'
           AND e.created_at < DATE_ADD('{fim}', INTERVAL 1 DAY)
         ORDER BY data_emissao
@@ -1666,11 +1679,10 @@ def q_pricing(origem: str, destino: str, inicio: str, fim: str) -> pd.DataFrame:
         {
             "Data Emissão": str(r.data_emissao),
             "Data Voo":     str(r.flight_date),
-            "Cia":          IATA_NOMES.get(r.cia_raw, r.cia_raw),
+            "Cia":          IATA_NOMES.get(r.cia_raw or "", r.cia_raw or ""),
             "Preço (R$)":   float(r.preco or 0),
             "Saída":        str(r.departure_time or ""),
             "Chegada":      str(r.arrival_time or ""),
-            "Trecho":       "Ida" if int(r.trecho or 1) == 1 else "Volta",
         }
         for r in rows
     ])
@@ -6956,7 +6968,7 @@ elif secao == "💲  Pricing":
             df_det = df_pricing.copy()
             df_det["Preço (R$)"] = df_det["Preço (R$)"].apply(brl)
             st.dataframe(
-                df_det[["Período", "Data Emissão", "Data Voo", "Cia", "Trecho", "Saída", "Chegada", "Preço (R$)"]],
+                df_det[["Período", "Data Emissão", "Data Voo", "Cia", "Saída", "Chegada", "Preço (R$)"]],
                 use_container_width=True, hide_index=True,
                 height=min(50 + len(df_det) * 35, 500),
             )

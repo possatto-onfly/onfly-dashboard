@@ -1703,7 +1703,7 @@ with st.sidebar:
     # ── Categoria ──
     GRUPOS = {
         "📊  Resultados": ["📊  GMV", "🎫  GMV de Incentivo", "💰  Take Rate", "💎  Take Rate c/ Incentivo", "📈  Tendência"],
-        "✈️  Visitas":    ["✈️  Cia Aérea", "🌍  Destino", "🗺️  Distribuição", "🌐  Potencial de Voo", "🏭  Consolidadores", "📋  Cia Aérea Legado", "⚖️  Balanceamento", "🔍  Buscas & Conversão"],
+        "✈️  Visitas":    ["✈️  Cia Aérea", "🌍  Destino", "🗺️  Distribuição", "🌐  Potencial de Voo", "🏭  Fontes de Emissão", "📋  Cia Aérea Legado", "⚖️  Balanceamento", "🔍  Buscas & Conversão"],
         "👥  Clientes":   ["🏢  Clientes", "💲  Pricing", "🛫  Quem voa o que?"],
         "💼  Incentivos": ["🔵  Azul", "🔴  LATAM"],
         "🔍  Análises":   [],
@@ -7887,10 +7887,10 @@ elif secao == "📝  Anotações":
                         save_anotacoes(anotacoes)
                         st.rerun()
 
-# ── 🏭 Consolidadores ────────────────────────────────────────────────────────
-elif secao == "🏭  Consolidadores":
+# ── 🏭 Fontes de Emissão ─────────────────────────────────────────────────────
+elif secao == "🏭  Fontes de Emissão":
 
-    st.markdown('<div class="sec-header-wrap"><p class="sec-header">🏭 Consolidadores</p></div>',
+    st.markdown('<div class="sec-header-wrap"><p class="sec-header">🏭 Fontes de Emissão</p></div>',
                 unsafe_allow_html=True)
 
     # Carrega lista de consolidadores antes das abas (usada nas duas)
@@ -7923,7 +7923,7 @@ elif secao == "🏭  Consolidadores":
                         f'<p class="kpi-value">{int(df_cons["Reservas"].sum()):,}</p></div>',
                         unsafe_allow_html=True)
         with _ct3:
-            st.markdown(f'<div class="kpi-card"><p class="kpi-label">Consolidadores</p>'
+            st.markdown(f'<div class="kpi-card"><p class="kpi-label">Fontes de Emissão</p>'
                         f'<p class="kpi-value">{len(df_cons)}</p></div>',
                         unsafe_allow_html=True)
 
@@ -8216,7 +8216,7 @@ elif secao == "🏭  Consolidadores":
             ))
             _fig_evo.update_layout(
                 title=dict(
-                    text="Emissões realizadas em Consolidadores",
+                    text="Emissões realizadas em Fontes de Emissão",
                     font=dict(size=18, color="#0F172A"),
                     x=0.02, xanchor="left",
                     pad=dict(l=8),

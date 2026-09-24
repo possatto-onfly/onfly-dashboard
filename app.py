@@ -2846,33 +2846,55 @@ def q_balanceamento_emissores(inicio: str, fim: str, cias_sel: tuple) -> pd.Data
 
 def q_cia_legado(inicio: str, fim: str) -> pd.DataFrame:
     """GMV e GMV Incentivo por cia aérea, normalizado por código IATA.
-    ROW_NUMBER garante 1 segmento por uuid (primeira saída), evitando
-    double-counting em voos com conexão operados por cias diferentes."""
+    Usa TABLE_SEG como fonte primária (company_operator) e silver_flight_orders
+    como fallback para reservas sem dado de segmento, cobrindo ~76% do total."""
     q = f"""
-        WITH ranked AS (
+        WITH emissions AS (
             SELECT
-                s.uuid,
-                UPPER(TRIM(s.company_operator))                    AS cia_raw,
-                ROW_NUMBER() OVER (
-                    PARTITION BY s.uuid
-                    ORDER BY s.departure_date_hour ASC NULLS LAST
-                )                                         AS rn
+                uuid,
+                SPLIT(uuid, '_')[OFFSET(0)]            AS proto_id,
+                total_amount_currency_brl,
+                onfly_amount_currency_brl
+            FROM `{TABLE}`
+            WHERE type = 'flight' AND status = 2
+              AND created_at >= '{inicio}'
+              AND created_at < DATE_ADD('{fim}', INTERVAL 1 DAY)
+        ),
+        seg_cia AS (
+            -- Fonte 1: TABLE_SEG — primeira saída por uuid
+            SELECT
+                RTRIM(s.uuid, '_')                     AS emis_uuid,
+                UPPER(TRIM(s.company_operator))         AS cia_raw
             FROM `{TABLE_SEG}` s
-            JOIN `{TABLE}` e ON RTRIM(s.uuid, '_') = e.uuid
-            WHERE e.type = 'flight' AND e.status = 2
-              AND s.segment = 0 AND s.step = 1
-              AND e.created_at >= '{inicio}'
-              AND e.created_at < DATE_ADD('{fim}', INTERVAL 1 DAY)
+            WHERE s.segment = 0 AND s.step = 1
               AND s.company_operator IS NOT NULL AND TRIM(s.company_operator) != ''
+            QUALIFY ROW_NUMBER() OVER (
+                PARTITION BY RTRIM(s.uuid, '_')
+                ORDER BY s.departure_date_hour ASC NULLS LAST
+            ) = 1
+        ),
+        fo_cia AS (
+            -- Fonte 2: silver_flight_orders — linha _ida por protocolo
+            SELECT
+                SPLIT(fo.uuid_protocol, '_')[OFFSET(0)] AS proto_id,
+                UPPER(TRIM(fo.standard_airline))         AS cia_raw
+            FROM `{TABLE_FLIGHT_ORDERS}` fo
+            WHERE fo.uuid_protocol LIKE '%_ida'
+              AND fo.standard_airline IS NOT NULL AND TRIM(fo.standard_airline) != ''
+            QUALIFY ROW_NUMBER() OVER (
+                PARTITION BY SPLIT(fo.uuid_protocol, '_')[OFFSET(0)]
+                ORDER BY fo.uuid_protocol
+            ) = 1
         )
         SELECT
-            r.cia_raw,
-            COUNT(DISTINCT r.uuid)                        AS reservas,
-            ROUND(SUM(e.total_amount_currency_brl), 2)    AS gmv,
-            ROUND(SUM(e.onfly_amount_currency_brl), 2)    AS gmv_bilhete
-        FROM ranked r
-        JOIN `{TABLE}` e ON RTRIM(r.uuid, '_') = e.uuid
-        WHERE r.rn = 1
+            COALESCE(sc.cia_raw, fc.cia_raw)              AS cia_raw,
+            COUNT(DISTINCT e.uuid)                         AS reservas,
+            ROUND(SUM(e.total_amount_currency_brl), 2)     AS gmv,
+            ROUND(SUM(e.onfly_amount_currency_brl), 2)     AS gmv_bilhete
+        FROM emissions e
+        LEFT JOIN seg_cia sc ON sc.emis_uuid = e.uuid
+        LEFT JOIN fo_cia  fc ON fc.proto_id  = e.proto_id
+        WHERE COALESCE(sc.cia_raw, fc.cia_raw) IS NOT NULL
         GROUP BY 1
         ORDER BY gmv DESC
     """

@@ -7951,7 +7951,7 @@ elif secao == "🏭  Fontes de Emissão":
 
         # ── Detalhe por consolidador ───────────────────────────────────────────
         st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-        st.markdown('<div class="sec-header-wrap"><p class="sec-header">Detalhe por Consolidador</p></div>',
+        st.markdown('<div class="sec-header-wrap"><p class="sec-header">Detalhe por Fonte de Emissão</p></div>',
                     unsafe_allow_html=True)
 
         _cons_opcoes = df_cons["Consolidador"].tolist()

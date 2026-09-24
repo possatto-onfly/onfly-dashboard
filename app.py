@@ -5878,16 +5878,34 @@ elif secao == "🌐  Potencial de Voo":
         st.info("Selecione um ou mais países para ver os voos emitidos.")
     else:
         _label_paises = ", ".join(paises_sel) if len(paises_sel) <= 3 else f"{len(paises_sel)} países selecionados"
-        st.markdown("<div style='height:24px'></div>", unsafe_allow_html=True)
-        st.markdown(f'<div class="sec-header-wrap"><p class="sec-header">✈️ Chegando em {_label_paises} de qualquer destino</p></div>',
-                    unsafe_allow_html=True)
 
         with st.spinner(f"Consultando voos para {_label_paises}..."):
             try:
-                df_pot = q_potencial_paises(tuple(paises_sel), i_str, f_str)
+                df_pot    = q_potencial_paises(tuple(paises_sel), i_str, f_str)
+                df_saindo = q_potencial_paises_saindo(tuple(paises_sel), i_str, f_str)
             except Exception as e:
                 st.error(f"Erro ao consultar BigQuery: {e}")
                 st.stop()
+
+        gmv_chegando_total = df_pot["GMV"].sum()    if not df_pot.empty    else 0.0
+        gmv_saindo_total   = df_saindo["GMV"].sum() if not df_saindo.empty else 0.0
+        gmv_combinado      = gmv_chegando_total + gmv_saindo_total
+
+        st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
+        gc1, gc2, gc3 = st.columns(3)
+        with gc1:
+            st.markdown(f"""<div class="kpi-card"><p class="kpi-label">GMV Total (Chegando + Saindo)</p>
+                <p class="kpi-value">{brl(gmv_combinado)}</p></div>""", unsafe_allow_html=True)
+        with gc2:
+            st.markdown(f"""<div class="kpi-card"><p class="kpi-label">GMV Chegando em {_label_paises}</p>
+                <p class="kpi-value">{brl(gmv_chegando_total)}</p></div>""", unsafe_allow_html=True)
+        with gc3:
+            st.markdown(f"""<div class="kpi-card"><p class="kpi-label">GMV Saindo de {_label_paises}</p>
+                <p class="kpi-value">{brl(gmv_saindo_total)}</p></div>""", unsafe_allow_html=True)
+        st.markdown("<div style='height:24px'></div>", unsafe_allow_html=True)
+
+        st.markdown(f'<div class="sec-header-wrap"><p class="sec-header">✈️ Chegando em {_label_paises} de qualquer destino</p></div>',
+                    unsafe_allow_html=True)
 
         if df_pot.empty:
             st.warning(f"Nenhuma emissão encontrada para **{_label_paises}** no período.")
@@ -5994,118 +6012,111 @@ elif secao == "🌐  Potencial de Voo":
                 },
             )
 
-            # ══ SEÇÃO: SAINDO DO PAÍS ════════════════════════════════════════
-            st.markdown("<hr style='margin:32px 0 24px 0; border:none; border-top:1px solid #E2E8F0;'>",
-                        unsafe_allow_html=True)
-            st.markdown(f'<div class="sec-header-wrap"><p class="sec-header">✈️ Saindo de {_label_paises} para qualquer destino</p></div>',
-                        unsafe_allow_html=True)
+        # ══ SEÇÃO: SAINDO DO PAÍS ════════════════════════════════════════
+        st.markdown("<hr style='margin:32px 0 24px 0; border:none; border-top:1px solid #E2E8F0;'>",
+                    unsafe_allow_html=True)
+        st.markdown(f'<div class="sec-header-wrap"><p class="sec-header">✈️ Saindo de {_label_paises} para qualquer destino</p></div>',
+                    unsafe_allow_html=True)
 
-            with st.spinner(f"Consultando voos saindo de {_label_paises}..."):
-                try:
-                    df_saindo = q_potencial_paises_saindo(tuple(paises_sel), i_str, f_str)
-                except Exception as e:
-                    st.error(f"Erro ao consultar BigQuery: {e}")
-                    df_saindo = pd.DataFrame()
+        if df_saindo.empty:
+            st.info(f"Nenhuma emissão encontrada saindo de **{_label_paises}** no período.")
+        else:
+            tot_r_s = df_saindo["Reservas"].sum()
+            tot_g_s = df_saindo["GMV"].sum()
+            tot_rt_s = df_saindo[["Origem", "Destino"]].drop_duplicates().shape[0]
+            cias_s   = df_saindo["Cia"].nunique()
 
-            if df_saindo.empty:
-                st.info(f"Nenhuma emissão encontrada saindo de **{_label_paises}** no período.")
-            else:
-                tot_r_s = df_saindo["Reservas"].sum()
-                tot_g_s = df_saindo["GMV"].sum()
-                tot_rt_s = df_saindo[["Origem", "Destino"]].drop_duplicates().shape[0]
-                cias_s   = df_saindo["Cia"].nunique()
+            ks1, ks2, ks3, ks4 = st.columns(4)
+            for col, label, valor in [
+                (ks1, "Rotas",       f"{tot_rt_s:,}"),
+                (ks2, "Reservas",    f"{tot_r_s:,}"),
+                (ks3, "GMV",         brl(tot_g_s)),
+                (ks4, "Cias Aéreas", f"{cias_s:,}"),
+            ]:
+                with col:
+                    st.markdown(f"""
+                        <div class="kpi-card">
+                            <p class="kpi-label">{label}</p>
+                            <p class="kpi-value">{valor}</p>
+                        </div>
+                    """, unsafe_allow_html=True)
 
-                ks1, ks2, ks3, ks4 = st.columns(4)
-                for col, label, valor in [
-                    (ks1, "Rotas",       f"{tot_rt_s:,}"),
-                    (ks2, "Reservas",    f"{tot_r_s:,}"),
-                    (ks3, "GMV",         brl(tot_g_s)),
-                    (ks4, "Cias Aéreas", f"{cias_s:,}"),
-                ]:
-                    with col:
-                        st.markdown(f"""
-                            <div class="kpi-card">
-                                <p class="kpi-label">{label}</p>
-                                <p class="kpi-value">{valor}</p>
-                            </div>
-                        """, unsafe_allow_html=True)
+            st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
 
-                st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
-
-                st.markdown('<div class="sec-header-wrap"><p class="sec-header">Por Destino</p></div>', unsafe_allow_html=True)
-                df_dest_s = (
-                    df_saindo.groupby("Destino", as_index=False)
-                    .agg(Reservas=("Reservas", "sum"), GMV=("GMV", "sum"))
-                    .sort_values("GMV", ascending=False)
-                )
-                df_dest_s["% GMV"] = (df_dest_s["GMV"] / tot_g_s * 100).round(1)
-                col_cs1, col_ts1 = st.columns([3, 2], gap="large")
-                with col_cs1:
-                    fig_ds = go.Figure(go.Bar(
-                        x=df_dest_s["Destino"], y=df_dest_s["GMV"],
-                        marker_color=ONFLY_BLUE,
-                        text=[brl(v) for v in df_dest_s["GMV"]],
-                        textposition="outside",
-                        textfont=dict(size=10, color="#334155"),
-                        hovertemplate="<b>%{x}</b><br>GMV: R$ %{y:,.2f}<extra></extra>",
-                    ))
-                    fig_ds.update_yaxes(tickprefix="R$ ")
-                    st.plotly_chart(plotly_layout(fig_ds, 300), use_container_width=True)
-                with col_ts1:
-                    st.dataframe(
-                        _brl_df(df_dest_s[["Destino", "Reservas", "GMV", "% GMV"]]),
-                        use_container_width=True, hide_index=True, height=300,
-                        column_config={
-                            "GMV":      st.column_config.TextColumn("GMV"),
-                            "Reservas": st.column_config.NumberColumn("Reservas", format="%d"),
-                            "% GMV":    st.column_config.NumberColumn("% GMV",    format="%.1f%%"),
-                        },
-                    )
-
-                st.markdown('<div class="sec-header-wrap"><p class="sec-header">Por Cia Aérea</p></div>', unsafe_allow_html=True)
-                df_cia_s = (
-                    df_saindo.groupby("Cia", as_index=False)
-                    .agg(Reservas=("Reservas", "sum"), GMV=("GMV", "sum"))
-                    .sort_values("GMV", ascending=False)
-                )
-                df_cia_s["% GMV"] = (df_cia_s["GMV"] / tot_g_s * 100).round(1)
-                col_cs2, col_ts2 = st.columns([3, 2], gap="large")
-                with col_cs2:
-                    fig_cs = go.Figure(go.Bar(
-                        x=df_cia_s["Cia"], y=df_cia_s["GMV"],
-                        marker_color=ONFLY_BLUE,
-                        text=[brl(v) for v in df_cia_s["GMV"]],
-                        textposition="outside",
-                        textfont=dict(size=10, color="#334155"),
-                        hovertemplate="<b>%{x}</b><br>GMV: R$ %{y:,.2f}<extra></extra>",
-                    ))
-                    fig_cs.update_yaxes(tickprefix="R$ ")
-                    st.plotly_chart(plotly_layout(fig_cs, 300), use_container_width=True)
-                with col_ts2:
-                    st.dataframe(
-                        _brl_df(df_cia_s[["Cia", "Reservas", "GMV", "% GMV"]]),
-                        use_container_width=True, hide_index=True, height=300,
-                        column_config={
-                            "GMV":      st.column_config.TextColumn("GMV"),
-                            "Reservas": st.column_config.NumberColumn("Reservas", format="%d"),
-                            "% GMV":    st.column_config.NumberColumn("% GMV",    format="%.1f%%"),
-                        },
-                    )
-
-                st.markdown('<div class="sec-header-wrap"><p class="sec-header">Detalhe por Rota e Cia Aérea</p></div>', unsafe_allow_html=True)
-                df_show_s = df_saindo.copy()
-                df_show_s["% GMV"] = (df_show_s["GMV"] / tot_g_s * 100).round(1)
+            st.markdown('<div class="sec-header-wrap"><p class="sec-header">Por Destino</p></div>', unsafe_allow_html=True)
+            df_dest_s = (
+                df_saindo.groupby("Destino", as_index=False)
+                .agg(Reservas=("Reservas", "sum"), GMV=("GMV", "sum"))
+                .sort_values("GMV", ascending=False)
+            )
+            df_dest_s["% GMV"] = (df_dest_s["GMV"] / tot_g_s * 100).round(1)
+            col_cs1, col_ts1 = st.columns([3, 2], gap="large")
+            with col_cs1:
+                fig_ds = go.Figure(go.Bar(
+                    x=df_dest_s["Destino"], y=df_dest_s["GMV"],
+                    marker_color=ONFLY_BLUE,
+                    text=[brl(v) for v in df_dest_s["GMV"]],
+                    textposition="outside",
+                    textfont=dict(size=10, color="#334155"),
+                    hovertemplate="<b>%{x}</b><br>GMV: R$ %{y:,.2f}<extra></extra>",
+                ))
+                fig_ds.update_yaxes(tickprefix="R$ ")
+                st.plotly_chart(plotly_layout(fig_ds, 300), use_container_width=True)
+            with col_ts1:
                 st.dataframe(
-                    _brl_df(df_show_s[["Origem", "Destino", "Cia", "Reservas", "GMV", "Ticket Médio", "% GMV"]]),
-                    use_container_width=True, hide_index=True,
-                    height=min(50 + len(df_show_s) * 35, 600),
+                    _brl_df(df_dest_s[["Destino", "Reservas", "GMV", "% GMV"]]),
+                    use_container_width=True, hide_index=True, height=300,
                     column_config={
-                        "GMV":          st.column_config.TextColumn("GMV"),
-                        "Ticket Médio": st.column_config.TextColumn("Ticket Médio"),
-                        "Reservas":     st.column_config.NumberColumn("Reservas",     format="%d"),
-                        "% GMV":        st.column_config.NumberColumn("% GMV",        format="%.1f%%"),
+                        "GMV":      st.column_config.TextColumn("GMV"),
+                        "Reservas": st.column_config.NumberColumn("Reservas", format="%d"),
+                        "% GMV":    st.column_config.NumberColumn("% GMV",    format="%.1f%%"),
                     },
                 )
+
+            st.markdown('<div class="sec-header-wrap"><p class="sec-header">Por Cia Aérea</p></div>', unsafe_allow_html=True)
+            df_cia_s = (
+                df_saindo.groupby("Cia", as_index=False)
+                .agg(Reservas=("Reservas", "sum"), GMV=("GMV", "sum"))
+                .sort_values("GMV", ascending=False)
+            )
+            df_cia_s["% GMV"] = (df_cia_s["GMV"] / tot_g_s * 100).round(1)
+            col_cs2, col_ts2 = st.columns([3, 2], gap="large")
+            with col_cs2:
+                fig_cs = go.Figure(go.Bar(
+                    x=df_cia_s["Cia"], y=df_cia_s["GMV"],
+                    marker_color=ONFLY_BLUE,
+                    text=[brl(v) for v in df_cia_s["GMV"]],
+                    textposition="outside",
+                    textfont=dict(size=10, color="#334155"),
+                    hovertemplate="<b>%{x}</b><br>GMV: R$ %{y:,.2f}<extra></extra>",
+                ))
+                fig_cs.update_yaxes(tickprefix="R$ ")
+                st.plotly_chart(plotly_layout(fig_cs, 300), use_container_width=True)
+            with col_ts2:
+                st.dataframe(
+                    _brl_df(df_cia_s[["Cia", "Reservas", "GMV", "% GMV"]]),
+                    use_container_width=True, hide_index=True, height=300,
+                    column_config={
+                        "GMV":      st.column_config.TextColumn("GMV"),
+                        "Reservas": st.column_config.NumberColumn("Reservas", format="%d"),
+                        "% GMV":    st.column_config.NumberColumn("% GMV",    format="%.1f%%"),
+                    },
+                )
+
+            st.markdown('<div class="sec-header-wrap"><p class="sec-header">Detalhe por Rota e Cia Aérea</p></div>', unsafe_allow_html=True)
+            df_show_s = df_saindo.copy()
+            df_show_s["% GMV"] = (df_show_s["GMV"] / tot_g_s * 100).round(1)
+            st.dataframe(
+                _brl_df(df_show_s[["Origem", "Destino", "Cia", "Reservas", "GMV", "Ticket Médio", "% GMV"]]),
+                use_container_width=True, hide_index=True,
+                height=min(50 + len(df_show_s) * 35, 600),
+                column_config={
+                    "GMV":          st.column_config.TextColumn("GMV"),
+                    "Ticket Médio": st.column_config.TextColumn("Ticket Médio"),
+                    "Reservas":     st.column_config.NumberColumn("Reservas",     format="%d"),
+                    "% GMV":        st.column_config.NumberColumn("% GMV",        format="%.1f%%"),
+                },
+            )
 
 
 # ══════════════════════════════════════════════════════════════════════════════

@@ -1715,6 +1715,9 @@ with st.sidebar:
     if grupo is not None:
         itens = GRUPOS[grupo]
         if itens:
+            # Limpa session state se o valor salvo não existe mais nas opções (ex: renomear categoria)
+            if st.session_state.get("sel_secao") not in itens:
+                st.session_state.pop("sel_secao", None)
             st.markdown("<p style='font-size:0.65rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#8C9BAB;margin:10px 0 6px 0;'>Categoria</p>", unsafe_allow_html=True)
             secao = st.selectbox("", itens, label_visibility="collapsed", key="sel_secao")
         else:

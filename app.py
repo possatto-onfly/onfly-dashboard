@@ -2890,14 +2890,13 @@ def q_cia_legado(inicio: str, fim: str) -> pd.DataFrame:
             ) = 1
         )
         SELECT
-            COALESCE(sc.cia_raw, fc.cia_raw)              AS cia_raw,
+            COALESCE(sc.cia_raw, fc.cia_raw, 'SEM CIA IDENTIFICADA') AS cia_raw,
             COUNT(DISTINCT e.uuid)                         AS reservas,
             ROUND(SUM(e.total_amount_currency_brl), 2)     AS gmv,
             ROUND(SUM(e.onfly_amount_currency_brl), 2)     AS gmv_bilhete
         FROM emissions e
         LEFT JOIN seg_cia sc ON sc.emis_uuid = e.uuid
         LEFT JOIN fo_cia  fc ON fc.proto_id  = e.proto_id
-        WHERE COALESCE(sc.cia_raw, fc.cia_raw) IS NOT NULL
         GROUP BY 1
         ORDER BY gmv DESC
     """
@@ -2906,8 +2905,11 @@ def q_cia_legado(inicio: str, fim: str) -> pd.DataFrame:
     agg: dict = {}
     for r in rows:
         raw = r.cia_raw or ""
-        codigo = raw if len(raw) <= 3 else nomes_iata.get(raw, raw)
-        codigo = IATA_NORMALIZACAO.get(codigo, codigo)
+        if raw == "SEM CIA IDENTIFICADA":
+            codigo = raw
+        else:
+            codigo = raw if len(raw) <= 3 else nomes_iata.get(raw, raw)
+            codigo = IATA_NORMALIZACAO.get(codigo, codigo)
         if codigo not in agg:
             agg[codigo] = {"reservas": 0, "gmv": 0.0, "gmv_bilhete": 0.0}
         agg[codigo]["reservas"]    += int(r.reservas or 0)

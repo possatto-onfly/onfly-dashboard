@@ -8418,7 +8418,7 @@ elif secao == "🔍  Buscas & Conversão":
     col_int, col_dom = st.columns(2)
 
     with col_int:
-        st.markdown("#### 🌍 Top 20 Destinos Internacionais")
+        st.markdown("#### 🌍 Top 20 Destinos Internacionais Mais Buscados")
         if not df_dest_int.empty:
             st.dataframe(
                 df_dest_int[["Destino", "País", "Buscas", "% do Total"]].style.format(
@@ -8428,7 +8428,7 @@ elif secao == "🔍  Buscas & Conversão":
             )
 
     with col_dom:
-        st.markdown("#### 🇧🇷 Top 20 Destinos Domésticos")
+        st.markdown("#### 🇧🇷 Top 20 Destinos Domésticos Mais Buscados")
         if not df_dest_dom.empty:
             st.dataframe(
                 df_dest_dom[["Destino", "Buscas", "% do Total"]].style.format(

@@ -7894,7 +7894,7 @@ elif secao == "🏭  Fontes de Emissão":
                 unsafe_allow_html=True)
 
     # Carrega lista de consolidadores antes das abas (usada nas duas)
-    with st.spinner("Carregando consolidadores..."):
+    with st.spinner("Carregando fontes de emissão..."):
         try:
             df_cons = q_consolidadores_lista(i_str, f_str)
         except Exception as _e:
@@ -7956,18 +7956,18 @@ elif secao == "🏭  Fontes de Emissão":
 
         _cons_opcoes = df_cons["Consolidador"].tolist()
         _cons_sel = st.multiselect(
-            "Selecione um ou mais consolidadores (vazio = todos)",
+            "Selecione uma ou mais fontes de emissão (vazio = todos)",
             options=_cons_opcoes,
-            placeholder="Todos os consolidadores...",
+            placeholder="Todas as fontes de emissão...",
             key="cons_sel_det",
         )
         # None = todos; lista = filtro múltiplo
         _cons_filtro = _cons_sel if _cons_sel else None
 
-        _spinner_label = ", ".join(_cons_sel) if _cons_sel else "todos os consolidadores"
+        _spinner_label = ", ".join(_cons_sel) if _cons_sel else "todas as fontes de emissão"
         df_cias_c = None
         if not _cons_sel:
-            st.info("☝️ Selecione um ou mais consolidadores acima para carregar o detalhamento de cias, clientes, rotas e voos emitidos.")
+            st.info("☝️ Selecione uma ou mais fontes de emissão acima para carregar o detalhamento de cias, clientes, rotas e voos emitidos.")
         else:
             with st.spinner(f"Carregando detalhes de {_spinner_label}..."):
                 try:
@@ -8159,14 +8159,14 @@ elif secao == "🏭  Fontes de Emissão":
 
         _evo_opcoes = df_cons["Consolidador"].tolist()
         _evo_sel = st.multiselect(
-            "Selecione consolidadores (vazio = todos)",
+            "Selecione fontes de emissão (vazio = todos)",
             options=_evo_opcoes,
-            placeholder="Todos os consolidadores...",
+            placeholder="Todas as fontes de emissão...",
             key="cons_evo_sel",
         )
         _evo_filtro = tuple(_evo_sel) if _evo_sel else None
 
-        _evo_label = ", ".join(_evo_sel) if _evo_sel else "todos os consolidadores"
+        _evo_label = ", ".join(_evo_sel) if _evo_sel else "todas as fontes de emissão"
 
         df_evo = None
         with st.spinner(f"⏳ Consultando BigQuery — evolução de **{_evo_label}**..."):

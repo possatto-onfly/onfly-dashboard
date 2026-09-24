@@ -8399,8 +8399,11 @@ elif secao == "🔍  Buscas & Conversão":
         fig_conv.add_bar(x=df_conv_mes["Mês"], y=df_conv_mes["Emissões"],
                          name="Emissões", marker_color=ONFLY_GREEN, opacity=0.9)
         fig_conv.add_scatter(x=df_conv_mes["Mês"], y=df_conv_mes["Conversão (%)"],
-                             name="Conversão (%)", mode="lines+markers",
+                             name="Conversão (%)", mode="lines+markers+text",
                              line=dict(color=ONFLY_ORANGE, width=2),
+                             text=[f"{v:.1f}%" for v in df_conv_mes["Conversão (%)"]],
+                             textposition="top center",
+                             textfont=dict(color=ONFLY_ORANGE, size=11),
                              yaxis="y2")
         fig_conv.update_layout(
             barmode="group", yaxis2=dict(overlaying="y", side="right", title="Conversão (%)"),

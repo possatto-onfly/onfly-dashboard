@@ -1753,7 +1753,7 @@ with st.sidebar:
         inicio = hoje.replace(year=hoje.year - 1, month=1, day=1)
         fim    = hoje.replace(year=hoje.year - 1, month=12, day=31)
     elif periodo == "Desde o início":
-        inicio = date(2020, 1, 1)
+        inicio = date(2018, 1, 1)
         fim    = hoje
     else:
         col_a, col_b = st.columns(2)

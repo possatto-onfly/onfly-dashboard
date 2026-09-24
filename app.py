@@ -8418,7 +8418,7 @@ elif secao == "🔍  Buscas & Conversão":
     col_int, col_dom = st.columns(2)
 
     with col_int:
-        st.markdown("#### 🌍 Top 20 Destinos Internacionais Mais Buscados")
+        st.markdown("<p style='font-size:0.95rem;font-weight:700;margin-bottom:8px;'>🌍 Top 20 Destinos Internacionais Mais Buscados</p>", unsafe_allow_html=True)
         if not df_dest_int.empty:
             st.dataframe(
                 df_dest_int[["Destino", "País", "Buscas", "% do Total"]].style.format(
@@ -8428,7 +8428,7 @@ elif secao == "🔍  Buscas & Conversão":
             )
 
     with col_dom:
-        st.markdown("#### 🇧🇷 Top 20 Destinos Domésticos Mais Buscados")
+        st.markdown("<p style='font-size:0.95rem;font-weight:700;margin-bottom:8px;'>🇧🇷 Top 20 Destinos Domésticos Mais Buscados</p>", unsafe_allow_html=True)
         if not df_dest_dom.empty:
             st.dataframe(
                 df_dest_dom[["Destino", "Buscas", "% do Total"]].style.format(

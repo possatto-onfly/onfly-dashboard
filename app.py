@@ -945,6 +945,8 @@ def q_cias_amadeus(inicio: str, fim: str) -> pd.DataFrame:
         ORDER BY GMV DESC
     """
     rows = list(bq_client().query(q).result())
+    if not rows:
+        return pd.DataFrame(columns=["Sigla", "Companhia", "Reservas", "GMV", "Ticket Médio"])
     df = pd.DataFrame([
         {"Sigla": r.Cia, "Reservas": int(r.Reservas),
          "GMV": float(r.GMV or 0), "Ticket Médio": float(r.ticket_medio or 0)}

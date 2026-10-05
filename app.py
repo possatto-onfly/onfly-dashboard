@@ -2740,7 +2740,7 @@ def q_balanceamento(inicio: str, fim: str, cias_sel: tuple, excluir_inter_nacion
     """Nacional/Internacional × Manual/Automático.
     Critério: is_international do silver_all_emissions (baseado no destino do voo).
     Filtro por cia via TABLE_SEG quando cias_sel não está vazio.
-    excluir_inter_nacionais: remove voos internacionais de LATAM/AZUL/GOL.
+    excluir_inter_nacionais: remove voos internacionais de LATAM/AZUL/AZUL CONECTA/GOL.
     """
     _manual_sql  = ", ".join(f"'{c}'" for c in sorted(_CANAIS_MANUAL))
     _filtro_cia  = ""
@@ -2753,7 +2753,7 @@ def q_balanceamento(inicio: str, fim: str, cias_sel: tuple, excluir_inter_nacion
         )"""
     _filtro_nac = ""
     if excluir_inter_nacionais:
-        _filtro_nac = "AND NOT (e.is_international = 1 AND UPPER(TRIM(e.consolidator_unified)) IN ('LATAM', 'AZUL', 'GOL'))"
+        _filtro_nac = "AND NOT (e.is_international = 1 AND UPPER(TRIM(e.consolidator_unified)) IN ('LATAM', 'AZUL', 'AZUL CONECTA', 'GOL'))"
     q = f"""
         SELECT
             CASE WHEN e.is_international = 1 THEN 'Internacional' ELSE 'Nacional' END AS escopo,
@@ -2791,7 +2791,7 @@ def q_balanceamento_canais(inicio: str, fim: str, cias_sel: tuple, excluir_inter
         )"""
     _filtro_nac = ""
     if excluir_inter_nacionais:
-        _filtro_nac = "AND NOT (e.is_international = 1 AND UPPER(TRIM(e.consolidator_unified)) IN ('LATAM', 'AZUL', 'GOL'))"
+        _filtro_nac = "AND NOT (e.is_international = 1 AND UPPER(TRIM(e.consolidator_unified)) IN ('LATAM', 'AZUL', 'AZUL CONECTA', 'GOL'))"
     q = f"""
         SELECT
             CASE WHEN e.is_international = 1 THEN 'Internacional' ELSE 'Nacional' END AS escopo,
@@ -2830,7 +2830,7 @@ def q_balanceamento_emissores(inicio: str, fim: str, cias_sel: tuple, excluir_in
         )"""
     _filtro_nac = ""
     if excluir_inter_nacionais:
-        _filtro_nac = "AND NOT (e.is_international = 1 AND UPPER(TRIM(e.consolidator_unified)) IN ('LATAM', 'AZUL', 'GOL'))"
+        _filtro_nac = "AND NOT (e.is_international = 1 AND UPPER(TRIM(e.consolidator_unified)) IN ('LATAM', 'AZUL', 'AZUL CONECTA', 'GOL'))"
     q = f"""
         SELECT
             CASE WHEN e.is_international = 1 THEN 'Internacional' ELSE 'Nacional' END AS escopo,
@@ -5748,7 +5748,7 @@ elif secao == "⚖️  Balanceamento":
         "Inclui cias aéreas nacionais",
         value=True,
         key="bal_inclui_nac",
-        help="Quando desmarcado, remove os voos internacionais de LATAM, AZUL e GOL do balanceamento.",
+        help="Quando desmarcado, remove os voos internacionais de LATAM, AZUL, Azul Conecta e GOL do balanceamento.",
     )
     _excluir_inter_nac = not _inclui_nac
 

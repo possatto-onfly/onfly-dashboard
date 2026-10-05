@@ -3668,8 +3668,7 @@ def q_lista_aeroportos() -> list[str]:
 
 @st.cache_data(ttl=300, show_spinner=False)
 def q_total_aeroporto(aeroporto: str, inicio: str, fim: str) -> dict:
-    """GMV e reservas corretos: cada booking (uuid) contado uma única vez, mesmo que
-    apareça em múltiplos trechos (ida + volta, conexões) ou múltiplos viajantes."""
+    """GMV, reservas e PAX corretos: cada booking (uuid) contado uma única vez."""
     ap = aeroporto.upper().strip()
     q = f"""
         WITH uuids AS (
@@ -3680,25 +3679,41 @@ def q_total_aeroporto(aeroporto: str, inicio: str, fim: str) -> dict:
                   UPPER(TRIM(s.departure_airport_code)) = '{ap}'
                   OR UPPER(TRIM(s.arrival_airport_code)) = '{ap}'
               )
+        ),
+        main AS (
+            SELECT
+                COUNT(DISTINCT u.uuid_e)                   AS reservas,
+                ROUND(SUM(e.total_amount_currency_brl), 2) AS gmv
+            FROM uuids u
+            JOIN `{TABLE}` e ON e.uuid = u.uuid_e
+            WHERE e.type = 'flight'
+              AND e.status = 2
+              AND e.created_at >= '{inicio}'
+              AND e.created_at < DATE_ADD('{fim}', INTERVAL 1 DAY)
+        ),
+        pax AS (
+            SELECT COUNT(DISTINCT CONCAT(RTRIM(s.uuid, '_'), '||', COALESCE(s.customer_id, ''))) AS pax
+            FROM `{TABLE_SEG}` s
+            JOIN `{TABLE}` e ON e.uuid = RTRIM(s.uuid, '_')
+            WHERE s.departure_airport_code != s.arrival_airport_code
+              AND (
+                  UPPER(TRIM(s.departure_airport_code)) = '{ap}'
+                  OR UPPER(TRIM(s.arrival_airport_code)) = '{ap}'
+              )
+              AND e.type = 'flight'
+              AND e.status = 2
+              AND e.created_at >= '{inicio}'
+              AND e.created_at < DATE_ADD('{fim}', INTERVAL 1 DAY)
         )
-        SELECT
-            COUNT(DISTINCT u.uuid_e)                       AS reservas,
-            ROUND(SUM(e.total_amount_currency_brl), 2)     AS gmv
-        FROM uuids u
-        JOIN `{TABLE}` e ON e.uuid = u.uuid_e
-        WHERE e.type = 'flight'
-          AND e.status = 2
-          AND e.created_at >= '{inicio}'
-          AND e.created_at < DATE_ADD('{fim}', INTERVAL 1 DAY)
+        SELECT m.reservas, m.gmv, COALESCE(p.pax, 0) AS pax
+        FROM main m, pax p
     """
     row = list(bq_client().query(q).result())[0]
-    return {"reservas": int(row.reservas or 0), "gmv": float(row.gmv or 0)}
+    return {"reservas": int(row.reservas or 0), "gmv": float(row.gmv or 0), "pax": int(row.pax or 0)}
 
 @st.cache_data(ttl=300, show_spinner=False)
 def q_destinos_por_aeroporto(aeroporto: str, inicio: str, fim: str) -> pd.DataFrame:
     ap = aeroporto.upper().strip()
-    # CTE dedup: 1 linha por (Origem, Destino, uuid_emissao, cia) — evita contar
-    # N× o GMV quando há N viajantes no mesmo booking ou N segmentos do mesmo uuid.
     q = f"""
         WITH seg_uniq AS (
             SELECT DISTINCT
@@ -3712,21 +3727,50 @@ def q_destinos_por_aeroporto(aeroporto: str, inicio: str, fim: str) -> pd.DataFr
                   UPPER(TRIM(s.departure_airport_code)) = '{ap}'
                   OR UPPER(TRIM(s.arrival_airport_code)) = '{ap}'
               )
+        ),
+        main_agg AS (
+            SELECT
+                u.Origem,
+                u.Destino,
+                COUNT(DISTINCT u.uuid_e)                  AS Reservas,
+                ROUND(SUM(e.total_amount_currency_brl), 2) AS GMV,
+                STRING_AGG(DISTINCT u.cia ORDER BY u.cia)  AS Cias
+            FROM seg_uniq u
+            JOIN `{TABLE}` e ON e.uuid = u.uuid_e
+            WHERE e.type = 'flight'
+              AND e.status = 2
+              AND e.created_at >= '{inicio}'
+              AND e.created_at < DATE_ADD('{fim}', INTERVAL 1 DAY)
+            GROUP BY 1, 2
+        ),
+        pax_agg AS (
+            SELECT
+                UPPER(TRIM(s.departure_airport_code)) AS Origem,
+                UPPER(TRIM(s.arrival_airport_code))   AS Destino,
+                COUNT(DISTINCT CONCAT(RTRIM(s.uuid, '_'), '||', COALESCE(s.customer_id, ''))) AS PAX
+            FROM `{TABLE_SEG}` s
+            JOIN `{TABLE}` e ON e.uuid = RTRIM(s.uuid, '_')
+            WHERE s.departure_airport_code != s.arrival_airport_code
+              AND (
+                  UPPER(TRIM(s.departure_airport_code)) = '{ap}'
+                  OR UPPER(TRIM(s.arrival_airport_code)) = '{ap}'
+              )
+              AND e.type = 'flight'
+              AND e.status = 2
+              AND e.created_at >= '{inicio}'
+              AND e.created_at < DATE_ADD('{fim}', INTERVAL 1 DAY)
+            GROUP BY 1, 2
         )
         SELECT
-            u.Origem,
-            u.Destino,
-            COUNT(DISTINCT u.uuid_e)                              AS Reservas,
-            ROUND(SUM(e.total_amount_currency_brl), 2)            AS GMV,
-            STRING_AGG(DISTINCT u.cia ORDER BY u.cia)             AS Cias
-        FROM seg_uniq u
-        JOIN `{TABLE}` e ON e.uuid = u.uuid_e
-        WHERE e.type = 'flight'
-          AND e.status = 2
-          AND e.created_at >= '{inicio}'
-          AND e.created_at < DATE_ADD('{fim}', INTERVAL 1 DAY)
-        GROUP BY 1, 2
-        ORDER BY GMV DESC
+            m.Origem,
+            m.Destino,
+            m.Reservas,
+            COALESCE(p.PAX, 0) AS PAX,
+            m.GMV,
+            m.Cias
+        FROM main_agg m
+        LEFT JOIN pax_agg p ON p.Origem = m.Origem AND p.Destino = m.Destino
+        ORDER BY m.GMV DESC
     """
     rows = list(bq_client().query(q).result())
     return pd.DataFrame([
@@ -3734,6 +3778,7 @@ def q_destinos_por_aeroporto(aeroporto: str, inicio: str, fim: str) -> pd.DataFr
             "Origem":   r.Origem,
             "Destino":  r.Destino,
             "Reservas": int(r.Reservas),
+            "PAX":      int(r.PAX or 0),
             "GMV":      float(r.GMV or 0),
             "Cias":     r.Cias or "—",
         }
@@ -5296,15 +5341,17 @@ elif secao == "🌍  Destino":
             # KPIs resumo — total via query dedicada (cada booking contado 1×)
             total_reservas = tot_ap["reservas"]
             total_gmv      = tot_ap["gmv"]
+            total_pax      = tot_ap["pax"]
             total_rotas    = len(df_dest)
 
             st.markdown("<div style='height:24px'></div>", unsafe_allow_html=True)
             st.markdown('<div class="sec-header-wrap"><p class="sec-header">✈️ TOTAL</p></div>', unsafe_allow_html=True)
-            k1, k2, k3 = st.columns(3)
+            k1, k2, k3, k4 = st.columns(4)
             for col, label, valor in [
                 (k1, "Rotas",    f"{total_rotas:,}"),
                 (k2, "Reservas", f"{total_reservas:,}"),
-                (k3, "GMV",      brl(total_gmv)),
+                (k3, "PAX",      f"{total_pax:,}"),
+                (k4, "GMV",      brl(total_gmv)),
             ]:
                 with col:
                     st.markdown(f"""
@@ -5319,28 +5366,33 @@ elif secao == "🌍  Destino":
                 df_s = df_bloco.copy()
                 df_s["% GMV"] = (df_s["GMV"] / gmv_ref * 100).round(1)
                 st.dataframe(
-                    _brl_df(df_s[["Origem", "Destino", "Reservas", "GMV", "% GMV", "Cias"]]),
+                    _brl_df(df_s[["Origem", "Destino", "Reservas", "PAX", "GMV", "% GMV", "Cias"]]),
                     use_container_width=True,
                     hide_index=True,
                     height=min(50 + len(df_s) * 35, 600),
                     column_config={
                         "GMV":      st.column_config.TextColumn("GMV"),
                         "Reservas": st.column_config.NumberColumn("Reservas", format="%d"),
+                        "PAX":      st.column_config.NumberColumn("PAX",      format="%d"),
                         "% GMV":    st.column_config.NumberColumn("% GMV",    format="%.1f%%"),
                     },
                 )
 
             # ── Saindo deste aeroporto ────────────────────────────────────────
-            df_saindo = df_dest[df_dest["Origem"].str.upper().str.strip() == aeroporto].copy()
+            df_saindo  = df_dest[df_dest["Origem"].str.upper().str.strip() == aeroporto].copy()
             res_saindo = df_saindo["Reservas"].sum()
+            pax_saindo = int(df_saindo["PAX"].sum())
             st.markdown(f'<div class="sec-header-wrap"><p class="sec-header">✈️ Saindo de {aeroporto}</p></div>', unsafe_allow_html=True)
-            c1, c2 = st.columns(2)
+            c1, c2, c3 = st.columns(3)
             with c1:
                 st.markdown(f"""<div class="kpi-card"><p class="kpi-label">Rotas</p>
                     <p class="kpi-value">{len(df_saindo):,}</p></div>""", unsafe_allow_html=True)
             with c2:
                 st.markdown(f"""<div class="kpi-card"><p class="kpi-label">Reservas</p>
                     <p class="kpi-value">{res_saindo:,}</p></div>""", unsafe_allow_html=True)
+            with c3:
+                st.markdown(f"""<div class="kpi-card"><p class="kpi-label">PAX</p>
+                    <p class="kpi-value">{pax_saindo:,}</p></div>""", unsafe_allow_html=True)
             st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
             if df_saindo.empty:
                 st.info("Nenhuma rota saindo deste aeroporto no período.")
@@ -5350,16 +5402,20 @@ elif secao == "🌍  Destino":
             st.markdown("<div style='height:32px'></div>", unsafe_allow_html=True)
 
             # ── Chegando neste aeroporto ──────────────────────────────────────
-            df_chegando = df_dest[df_dest["Destino"].str.upper().str.strip() == aeroporto].copy()
+            df_chegando  = df_dest[df_dest["Destino"].str.upper().str.strip() == aeroporto].copy()
             res_chegando = df_chegando["Reservas"].sum()
+            pax_chegando = int(df_chegando["PAX"].sum())
             st.markdown(f'<div class="sec-header-wrap"><p class="sec-header">🛬 Chegando em {aeroporto}</p></div>', unsafe_allow_html=True)
-            c4, c5 = st.columns(2)
+            c4, c5, c6 = st.columns(3)
             with c4:
                 st.markdown(f"""<div class="kpi-card"><p class="kpi-label">Rotas</p>
                     <p class="kpi-value">{len(df_chegando):,}</p></div>""", unsafe_allow_html=True)
             with c5:
                 st.markdown(f"""<div class="kpi-card"><p class="kpi-label">Reservas</p>
                     <p class="kpi-value">{res_chegando:,}</p></div>""", unsafe_allow_html=True)
+            with c6:
+                st.markdown(f"""<div class="kpi-card"><p class="kpi-label">PAX</p>
+                    <p class="kpi-value">{pax_chegando:,}</p></div>""", unsafe_allow_html=True)
             st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
             if df_chegando.empty:
                 st.info("Nenhuma rota chegando neste aeroporto no período.")

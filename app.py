@@ -3668,7 +3668,8 @@ def q_lista_aeroportos() -> list[str]:
 
 @st.cache_data(ttl=300, show_spinner=False)
 def q_total_aeroporto(aeroporto: str, inicio: str, fim: str) -> dict:
-    """GMV, reservas e PAX corretos: cada booking (uuid) contado uma única vez."""
+    """GMV e reservas corretos: cada booking (uuid) contado uma única vez, mesmo que
+    apareça em múltiplos trechos (ida + volta, conexões) ou múltiplos viajantes."""
     ap = aeroporto.upper().strip()
     q = f"""
         WITH uuids AS (
@@ -3679,37 +3680,19 @@ def q_total_aeroporto(aeroporto: str, inicio: str, fim: str) -> dict:
                   UPPER(TRIM(s.departure_airport_code)) = '{ap}'
                   OR UPPER(TRIM(s.arrival_airport_code)) = '{ap}'
               )
-        ),
-        main AS (
-            SELECT
-                COUNT(DISTINCT u.uuid_e)                   AS reservas,
-                ROUND(SUM(e.total_amount_currency_brl), 2) AS gmv
-            FROM uuids u
-            JOIN `{TABLE}` e ON e.uuid = u.uuid_e
-            WHERE e.type = 'flight'
-              AND e.status = 2
-              AND e.created_at >= '{inicio}'
-              AND e.created_at < DATE_ADD('{fim}', INTERVAL 1 DAY)
-        ),
-        pax AS (
-            SELECT COUNT(DISTINCT CONCAT(RTRIM(s.uuid, '_'), '||', COALESCE(s.customer_id, ''))) AS pax
-            FROM `{TABLE_SEG}` s
-            JOIN `{TABLE}` e ON e.uuid = RTRIM(s.uuid, '_')
-            WHERE s.departure_airport_code != s.arrival_airport_code
-              AND (
-                  UPPER(TRIM(s.departure_airport_code)) = '{ap}'
-                  OR UPPER(TRIM(s.arrival_airport_code)) = '{ap}'
-              )
-              AND e.type = 'flight'
-              AND e.status = 2
-              AND e.created_at >= '{inicio}'
-              AND e.created_at < DATE_ADD('{fim}', INTERVAL 1 DAY)
         )
-        SELECT m.reservas, m.gmv, COALESCE(p.pax, 0) AS pax
-        FROM main m, pax p
+        SELECT
+            COUNT(DISTINCT u.uuid_e)                       AS reservas,
+            ROUND(SUM(e.total_amount_currency_brl), 2)     AS gmv
+        FROM uuids u
+        JOIN `{TABLE}` e ON e.uuid = u.uuid_e
+        WHERE e.type = 'flight'
+          AND e.status = 2
+          AND e.created_at >= '{inicio}'
+          AND e.created_at < DATE_ADD('{fim}', INTERVAL 1 DAY)
     """
     row = list(bq_client().query(q).result())[0]
-    return {"reservas": int(row.reservas or 0), "gmv": float(row.gmv or 0), "pax": int(row.pax or 0)}
+    return {"reservas": int(row.reservas or 0), "gmv": float(row.gmv or 0)}
 
 @st.cache_data(ttl=300, show_spinner=False)
 def q_destinos_por_aeroporto(aeroporto: str, inicio: str, fim: str) -> pd.DataFrame:
@@ -5341,7 +5324,7 @@ elif secao == "🌍  Destino":
             # KPIs resumo — total via query dedicada (cada booking contado 1×)
             total_reservas = tot_ap["reservas"]
             total_gmv      = tot_ap["gmv"]
-            total_pax      = tot_ap["pax"]
+            total_pax      = int(df_dest["PAX"].sum())  # soma das rotas = saindo + chegando
             total_rotas    = len(df_dest)
 
             st.markdown("<div style='height:24px'></div>", unsafe_allow_html=True)

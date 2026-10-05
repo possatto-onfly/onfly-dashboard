@@ -2736,10 +2736,11 @@ def q_cias_balanceamento(inicio: str, fim: str) -> list:
 
 
 @st.cache_data(ttl=300, show_spinner=False)
-def q_balanceamento(inicio: str, fim: str, cias_sel: tuple) -> pd.DataFrame:
+def q_balanceamento(inicio: str, fim: str, cias_sel: tuple, excluir_inter_nacionais: bool = False) -> pd.DataFrame:
     """Nacional/Internacional × Manual/Automático.
     Critério: is_international do silver_all_emissions (baseado no destino do voo).
     Filtro por cia via TABLE_SEG quando cias_sel não está vazio.
+    excluir_inter_nacionais: remove voos internacionais de LATAM/AZUL/GOL.
     """
     _manual_sql  = ", ".join(f"'{c}'" for c in sorted(_CANAIS_MANUAL))
     _filtro_cia  = ""
@@ -2750,6 +2751,9 @@ def q_balanceamento(inicio: str, fim: str, cias_sel: tuple) -> pd.DataFrame:
             WHERE segment = 0 AND step = 1
               AND UPPER(TRIM(company_operator)) IN ({_cias_sql})
         )"""
+    _filtro_nac = ""
+    if excluir_inter_nacionais:
+        _filtro_nac = "AND NOT (e.is_international = 1 AND UPPER(TRIM(e.consolidator_unified)) IN ('LATAM', 'AZUL', 'GOL'))"
     q = f"""
         SELECT
             CASE WHEN e.is_international = 1 THEN 'Internacional' ELSE 'Nacional' END AS escopo,
@@ -2762,6 +2766,7 @@ def q_balanceamento(inicio: str, fim: str, cias_sel: tuple) -> pd.DataFrame:
           AND e.created_at >= '{inicio}'
           AND e.created_at < DATE_ADD('{fim}', INTERVAL 1 DAY)
           {_filtro_cia}
+          {_filtro_nac}
         GROUP BY 1, 2
     """
     rows = list(bq_client().query(q).result())
@@ -2773,7 +2778,7 @@ def q_balanceamento(inicio: str, fim: str, cias_sel: tuple) -> pd.DataFrame:
 
 
 @st.cache_data(ttl=300, show_spinner=False)
-def q_balanceamento_canais(inicio: str, fim: str, cias_sel: tuple) -> pd.DataFrame:
+def q_balanceamento_canais(inicio: str, fim: str, cias_sel: tuple, excluir_inter_nacionais: bool = False) -> pd.DataFrame:
     """Detalha onde foram feitas as emissões MANUAIS, por canal e escopo."""
     _manual_sql = ", ".join(f"'{c}'" for c in sorted(_CANAIS_MANUAL))
     _filtro_cia = ""
@@ -2784,6 +2789,9 @@ def q_balanceamento_canais(inicio: str, fim: str, cias_sel: tuple) -> pd.DataFra
             WHERE segment = 0 AND step = 1
               AND UPPER(TRIM(company_operator)) IN ({_cias_sql})
         )"""
+    _filtro_nac = ""
+    if excluir_inter_nacionais:
+        _filtro_nac = "AND NOT (e.is_international = 1 AND UPPER(TRIM(e.consolidator_unified)) IN ('LATAM', 'AZUL', 'GOL'))"
     q = f"""
         SELECT
             CASE WHEN e.is_international = 1 THEN 'Internacional' ELSE 'Nacional' END AS escopo,
@@ -2796,6 +2804,7 @@ def q_balanceamento_canais(inicio: str, fim: str, cias_sel: tuple) -> pd.DataFra
           AND e.created_at >= '{inicio}'
           AND e.created_at < DATE_ADD('{fim}', INTERVAL 1 DAY)
           {_filtro_cia}
+          {_filtro_nac}
         GROUP BY 1, 2
         ORDER BY escopo, gmv DESC
     """
@@ -2808,7 +2817,7 @@ def q_balanceamento_canais(inicio: str, fim: str, cias_sel: tuple) -> pd.DataFra
 
 
 @st.cache_data(ttl=300, show_spinner=False)
-def q_balanceamento_emissores(inicio: str, fim: str, cias_sel: tuple) -> pd.DataFrame:
+def q_balanceamento_emissores(inicio: str, fim: str, cias_sel: tuple, excluir_inter_nacionais: bool = False) -> pd.DataFrame:
     """Ranking de emissores manuais por escopo (Nacional/Internacional)."""
     _manual_sql = ", ".join(f"'{c}'" for c in sorted(_CANAIS_MANUAL))
     _filtro_cia = ""
@@ -2819,6 +2828,9 @@ def q_balanceamento_emissores(inicio: str, fim: str, cias_sel: tuple) -> pd.Data
             WHERE segment = 0 AND step = 1
               AND UPPER(TRIM(company_operator)) IN ({_cias_sql})
         )"""
+    _filtro_nac = ""
+    if excluir_inter_nacionais:
+        _filtro_nac = "AND NOT (e.is_international = 1 AND UPPER(TRIM(e.consolidator_unified)) IN ('LATAM', 'AZUL', 'GOL'))"
     q = f"""
         SELECT
             CASE WHEN e.is_international = 1 THEN 'Internacional' ELSE 'Nacional' END AS escopo,
@@ -2832,6 +2844,7 @@ def q_balanceamento_emissores(inicio: str, fim: str, cias_sel: tuple) -> pd.Data
           AND e.created_at >= '{inicio}'
           AND e.created_at < DATE_ADD('{fim}', INTERVAL 1 DAY)
           {_filtro_cia}
+          {_filtro_nac}
         GROUP BY 1, 2, 3
         ORDER BY escopo, gmv DESC
     """
@@ -5730,6 +5743,17 @@ elif secao == "⚖️  Balanceamento":
     st.markdown('<div class="sec-header-wrap"><p class="sec-header">⚖️ Balanceamento de Emissão</p></div>',
                 unsafe_allow_html=True)
 
+    # ── Checkbox: inclui voos internacionais das nacionais ───────────────────
+    _inclui_nac = st.checkbox(
+        "Inclui cias aéreas nacionais",
+        value=True,
+        key="bal_inclui_nac",
+        help="Quando desmarcado, remove os voos internacionais de LATAM, AZUL e GOL do balanceamento.",
+    )
+    _excluir_inter_nac = not _inclui_nac
+
+    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+
     # ── Filtro de cias ────────────────────────────────────────────────────────
     with st.spinner("Carregando cias aéreas..."):
         _bal_cias_todas = q_cias_balanceamento(i_str, f_str)
@@ -5751,7 +5775,7 @@ elif secao == "⚖️  Balanceamento":
     # ── Busca ─────────────────────────────────────────────────────────────────
     with st.spinner("Carregando balanceamento..."):
         try:
-            df_bal = q_balanceamento(i_str, f_str, _bal_filtro)
+            df_bal = q_balanceamento(i_str, f_str, _bal_filtro, excluir_inter_nacionais=_excluir_inter_nac)
         except Exception as _e:
             st.error(f"Erro ao consultar BigQuery: {_e}")
             st.stop()
@@ -5891,7 +5915,7 @@ elif secao == "⚖️  Balanceamento":
 
         with st.spinner("Carregando canais manuais..."):
             try:
-                df_canais = q_balanceamento_canais(i_str, f_str, _bal_filtro)
+                df_canais = q_balanceamento_canais(i_str, f_str, _bal_filtro, excluir_inter_nacionais=_excluir_inter_nac)
             except Exception as _ec:
                 st.error(f"Erro ao consultar BigQuery: {_ec}")
                 df_canais = pd.DataFrame()
@@ -5946,7 +5970,7 @@ elif secao == "⚖️  Balanceamento":
 
         with st.spinner("Carregando emissores..."):
             try:
-                df_emiss = q_balanceamento_emissores(i_str, f_str, _bal_filtro)
+                df_emiss = q_balanceamento_emissores(i_str, f_str, _bal_filtro, excluir_inter_nacionais=_excluir_inter_nac)
             except Exception as _ee:
                 st.error(f"Erro ao consultar BigQuery: {_ee}")
                 df_emiss = pd.DataFrame()

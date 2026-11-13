@@ -5287,6 +5287,56 @@ elif secao == "✈️  Cia Aérea":
             },
         )
 
+    # ── GMV Mensal ──────────────────────────────────────────────────────────
+    st.markdown("<div style='height:24px'></div>", unsafe_allow_html=True)
+    st.markdown('<div class="sec-header-wrap"><p class="sec-header">GMV Mês a Mês</p></div>', unsafe_allow_html=True)
+
+    anos_disp = sorted(df_ano["Ano"].tolist(), reverse=True) if not df_ano.empty else [date.today().year]
+    col_ano, _ = st.columns([1, 5])
+    with col_ano:
+        ano_men_sel = st.selectbox("Ano", anos_disp, index=0, key="cia_gmv_mensal_ano", label_visibility="collapsed")
+
+    with st.spinner("Carregando GMV mensal..."):
+        try:
+            df_men = q_gmv_mensal_seg(variantes, int(ano_men_sel))
+        except Exception as e:
+            st.error(f"Erro: {e}")
+            df_men = pd.DataFrame()
+
+    if not df_men.empty and df_men["GMV"].sum() > 0:
+        MESES_PT = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"]
+        df_men["Mês Nome"] = df_men["Mês"].apply(lambda m: MESES_PT[m - 1])
+        col_chart_men, col_tbl_men = st.columns([3, 2], gap="large")
+        with col_chart_men:
+            fig_men = go.Figure()
+            fig_men.add_trace(go.Bar(
+                x=df_men["Mês Nome"], y=df_men["GMV"],
+                marker_color=ONFLY_BLUE,
+                text=[brl(v) if v > 0 else "" for v in df_men["GMV"]],
+                textposition="outside",
+                textfont=dict(size=11, color="#334155"),
+                hovertemplate="<b>%{x}</b><br>GMV: R$ %{y:,.2f}<extra></extra>",
+            ))
+            fig_men.update_yaxes(tickprefix="R$ ")
+            st.plotly_chart(plotly_layout(fig_men, 300), use_container_width=True)
+        with col_tbl_men:
+            gmv_total_men = df_men["GMV"].sum()
+            df_men_show = df_men.copy()
+            df_men_show["% Total"] = (df_men_show["GMV"] / gmv_total_men * 100).round(1) if gmv_total_men > 0 else 0.0
+            df_men_show = df_men_show.rename(columns={"Mês Nome": "Mês"})
+            st.dataframe(
+                _brl_df(df_men_show[["Mês", "Reservas", "GMV", "% Total"]]),
+                use_container_width=True, hide_index=True, height=300,
+                column_config={
+                    "Mês":      st.column_config.TextColumn("Mês"),
+                    "GMV":      st.column_config.TextColumn("GMV"),
+                    "Reservas": st.column_config.NumberColumn("Reservas", format="%d"),
+                    "% Total":  st.column_config.NumberColumn("% Total", format="%.1f%%"),
+                },
+            )
+    else:
+        st.info(f"Sem dados de GMV mensal para {ano_men_sel}.")
+
 # ══════════════════════════════════════════════════════════════════════════════
 # SEÇÃO: DISTRIBUIÇÃO
 # ══════════════════════════════════════════════════════════════════════════════

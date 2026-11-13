@@ -5323,7 +5323,7 @@ elif secao == "✈️  Cia Aérea":
             gmv_total_men = df_men["GMV"].sum()
             df_men_show = df_men.copy()
             df_men_show["% Total"] = (df_men_show["GMV"] / gmv_total_men * 100).round(1) if gmv_total_men > 0 else 0.0
-            df_men_show = df_men_show.rename(columns={"Mês Nome": "Mês"})
+            df_men_show = df_men_show.drop(columns=["Mês"]).rename(columns={"Mês Nome": "Mês"})
             st.dataframe(
                 _brl_df(df_men_show[["Mês", "Reservas", "GMV", "% Total"]]),
                 use_container_width=True, hide_index=True, height=300,
